@@ -1,0 +1,45 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Create runtime directory
+        if [ ! -d /run/netctl ]; then
+            mkdir -p /run/netctl
+            chmod 755 /run/netctl
+        fi
+
+        # Update man database
+        if [ -x /usr/bin/mandb ]; then
+            mandb -q || true
+        fi
+
+        # Reload systemd daemon
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload || true
+        fi
+
+        echo "netctl has been installed successfully."
+        echo ""
+        echo "To get started:"
+        echo "  - See 'man netctl' for command reference"
+        echo "  - See 'man netctl.nctl' for configuration format"
+        echo "  - Example configs in /usr/share/doc/netctl/examples/"
+        echo ""
+        echo "To enable on boot:"
+        echo "  sudo systemctl enable netctl.service"
+        echo ""
+        ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

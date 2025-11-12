@@ -1,0 +1,44 @@
+Source: netctl
+Section: net
+Priority: optional
+Maintainer: netctl developers <netctl@example.com>
+Build-Depends: debhelper-compat (= 13),
+               cargo,
+               rustc (>= 1.70),
+               pkg-config,
+               libc6-dev
+Standards-Version: 4.6.2
+Homepage: https://github.com/netctl/netctl
+Vcs-Git: https://github.com/netctl/netctl.git
+Vcs-Browser: https://github.com/netctl/netctl
+Rules-Requires-Root: no
+
+Package: netctl
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends},
+         iproute2,
+         wireless-tools | iw,
+         wpasupplicant,
+         unbound
+Recommends: dora-dhcp
+Suggests: hostapd,
+          openvpn,
+          wireguard-tools
+Description: Async network management tool
+ netctl is an async network management tool built on tokio for high
+ performance. It provides comprehensive network administration capabilities
+ including:
+ .
+  * Interface management (up/down, IP configuration)
+  * WiFi support (scan, connect, regulatory domain)
+  * Access point mode with hostapd integration
+  * DHCP server configuration with dora
+  * DNS management with unbound integration
+  * Routing control
+  * Bridge and VLAN support
+  * VPN support (OpenVPN, WireGuard)
+  * NetworkManager D-Bus compatibility
+  * Plugin system for extensibility
+ .
+ netctl can be used as a drop-in replacement for NetworkManager with its
+ D-Bus compatibility layer, or as a standalone network management solution.

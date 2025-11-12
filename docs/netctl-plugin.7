@@ -1,0 +1,379 @@
+.TH NETCTL-PLUGIN 7 "2025" "netctl" "Miscellaneous"
+.SH NAME
+netctl-plugin \- netctl plugin development guide
+.SH DESCRIPTION
+.B netctl
+supports a plugin system that allows extending functionality for additional
+network device types and protocols. Plugins can implement custom connection
+handling, device management, and integration with external tools.
+.SH PLUGIN ARCHITECTURE
+.SS Plugin Types
+netctl supports the following plugin types:
+.TP
+.B Connection Plugins
+Handle specific connection types (e.g., OpenVPN, WireGuard, bridge, VLAN)
+.TP
+.B Device Plugins
+Manage specialized network devices (e.g., TUN/TAP, virtual interfaces)
+.TP
+.B Protocol Plugins
+Implement network protocols (e.g., PPPoE, L2TP)
+.SS Plugin Interface
+Plugins must implement the
+.B NetworkPlugin
+trait defined in
+.IR src/plugin/traits.rs .
+.SH PLUGIN TRAIT
+.SS Required Methods
+.TP
+.B fn name(&self) -> &str
+Return plugin name
+.TP
+.B async fn supported_types(&self) -> Vec<String>
+Return list of supported connection types
+.TP
+.B async fn validate_config(&self, config: &ConnectionConfig) -> Result<()>
+Validate configuration before activation
+.TP
+.B async fn activate(&self, config: &ConnectionConfig) -> Result<()>
+Activate a connection
+.TP
+.B async fn deactivate(&self, config: &ConnectionConfig) -> Result<()>
+Deactivate a connection
+.TP
+.B async fn status(&self, config: &ConnectionConfig) -> Result<PluginStatus>
+Get connection status
+.SS Optional Methods
+.TP
+.B async fn can_handle(&self, connection_type: &str) -> bool
+Check if plugin can handle a connection type (default: checks supported_types)
+.TP
+.B async fn prepare(&self, config: &ConnectionConfig) -> Result<()>
+Prepare resources before activation (default: no-op)
+.TP
+.B async fn cleanup(&self, config: &ConnectionConfig) -> Result<()>
+Clean up resources after deactivation (default: no-op)
+.SH CREATING A PLUGIN
+.SS Step 1: Create Plugin Module
+Create a new file in
+.IR src/plugin/ :
+.EX
+// src/plugin/myplugin.rs
+use async_trait::async_trait;
+use crate::plugin::traits::{NetworkPlugin, PluginStatus};
+use crate::connection_config::ConnectionConfig;
+use crate::error::{NetctlResult, NetctlError};
+
+pub struct MyPlugin {
+    // Plugin state
+}
+
+impl MyPlugin {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+.EE
+.SS Step 2: Implement NetworkPlugin Trait
+.EX
+#[async_trait]
+impl NetworkPlugin for MyPlugin {
+    fn name(&self) -> &str {
+        "myplugin"
+    }
+
+    async fn supported_types(&self) -> Vec<String> {
+        vec!["mytype".to_string()]
+    }
+
+    async fn validate_config(
+        &self,
+        config: &ConnectionConfig
+    ) -> NetctlResult<()> {
+        // Validate configuration
+        Ok(())
+    }
+
+    async fn activate(
+        &self,
+        config: &ConnectionConfig
+    ) -> NetctlResult<()> {
+        // Activate connection
+        Ok(())
+    }
+
+    async fn deactivate(
+        &self,
+        config: &ConnectionConfig
+    ) -> NetctlResult<()> {
+        // Deactivate connection
+        Ok(())
+    }
+
+    async fn status(
+        &self,
+        config: &ConnectionConfig
+    ) -> NetctlResult<PluginStatus> {
+        // Return status
+        Ok(PluginStatus::Active)
+    }
+}
+.EE
+.SS Step 3: Register Plugin
+Add plugin to
+.IR src/plugin/mod.rs :
+.EX
+pub mod myplugin;
+
+use crate::plugin::myplugin::MyPlugin;
+
+pub fn register_plugins(
+    manager: &mut PluginManager
+) {
+    manager.register(Box::new(MyPlugin::new()));
+    // ... other plugins
+}
+.EE
+.SS Step 4: Add Plugin Configuration
+Extend
+.B ConnectionConfig
+if needed for plugin-specific settings:
+.EX
+// In connection_config.rs
+#[derive(Deserialize, Serialize)]
+pub struct MyPluginConfig {
+    pub option1: String,
+    pub option2: u32,
+}
+.EE
+.SH PLUGIN EXAMPLES
+.SS Bridge Plugin
+Manages Linux bridge devices:
+.EX
+pub struct BridgePlugin;
+
+#[async_trait]
+impl NetworkPlugin for BridgePlugin {
+    fn name(&self) -> &str { "bridge" }
+
+    async fn supported_types(&self) -> Vec<String> {
+        vec!["bridge".to_string()]
+    }
+
+    async fn activate(
+        &self,
+        config: &ConnectionConfig
+    ) -> NetctlResult<()> {
+        let bridge_config = config.bridge
+            .as_ref()
+            .ok_or(NetctlError::InvalidConfig(
+                "Missing bridge config".into()
+            ))?;
+
+        // Create bridge
+        Command::new("ip")
+            .args(&["link", "add", "name",
+                   &config.connection.interface_name,
+                   "type", "bridge"])
+            .status()
+            .await?;
+
+        // Add member interfaces
+        for iface in &bridge_config.interfaces {
+            Command::new("ip")
+                .args(&["link", "set", iface,
+                       "master",
+                       &config.connection.interface_name])
+                .status()
+                .await?;
+        }
+
+        // Bring up bridge
+        Command::new("ip")
+            .args(&["link", "set",
+                   &config.connection.interface_name,
+                   "up"])
+            .status()
+            .await?;
+
+        Ok(())
+    }
+
+    // ... other methods
+}
+.EE
+.SS OpenVPN Plugin
+Manages OpenVPN connections:
+.EX
+pub struct OpenVpnPlugin {
+    processes: Arc<Mutex<HashMap<String, Child>>>,
+}
+
+#[async_trait]
+impl NetworkPlugin for OpenVpnPlugin {
+    fn name(&self) -> &str { "openvpn" }
+
+    async fn supported_types(&self) -> Vec<String> {
+        vec!["vpn".to_string()]
+    }
+
+    async fn activate(
+        &self,
+        config: &ConnectionConfig
+    ) -> NetctlResult<()> {
+        let vpn_config = config.vpn
+            .as_ref()
+            .ok_or(NetctlError::InvalidConfig(
+                "Missing VPN config".into()
+            ))?;
+
+        if vpn_config.vpn_type != "openvpn" {
+            return Ok(()); // Not our type
+        }
+
+        // Start OpenVPN process
+        let child = Command::new("openvpn")
+            .arg("--config")
+            .arg(&vpn_config.config_file)
+            .spawn()?;
+
+        // Store process handle
+        self.processes.lock().await
+            .insert(config.connection.uuid.clone(),
+                   child);
+
+        Ok(())
+    }
+
+    async fn deactivate(
+        &self,
+        config: &ConnectionConfig
+    ) -> NetctlResult<()> {
+        // Kill OpenVPN process
+        if let Some(mut child) =
+            self.processes.lock().await
+                .remove(&config.connection.uuid) {
+            child.kill().await?;
+        }
+        Ok(())
+    }
+
+    // ... other methods
+}
+.EE
+.SH PLUGIN CONFIGURATION
+Plugins can be configured via:
+.TP
+.B Connection Files
+.nctl files include plugin-specific sections
+.TP
+.B Plugin Config Files
+Optional
+.I /etc/netctl/plugins/plugin-name.conf
+.TP
+.B Runtime Options
+Command-line options passed to netctl
+.SH BEST PRACTICES
+.SS Error Handling
+.IP \[bu] 2
+Use
+.B NetctlError
+types consistently
+.IP \[bu]
+Provide detailed error messages
+.IP \[bu]
+Clean up resources on errors
+.SS Async Operations
+.IP \[bu] 2
+Use async/await for I/O operations
+.IP \[bu]
+Don't block the tokio runtime
+.IP \[bu]
+Use timeouts for external commands
+.SS Resource Management
+.IP \[bu] 2
+Clean up in deactivate() and cleanup()
+.IP \[bu]
+Track resources (processes, files, etc.)
+.IP \[bu]
+Handle crashes gracefully
+.SS Logging
+.IP \[bu] 2
+Use tracing crate for logging
+.IP \[bu]
+Log at appropriate levels (trace, debug, info, warn, error)
+.IP \[bu]
+Include context in log messages
+.SS Testing
+.IP \[bu] 2
+Write unit tests for validation logic
+.IP \[bu]
+Write integration tests for activate/deactivate
+.IP \[bu]
+Test error conditions
+.SH PLUGIN LIFECYCLE
+.TP
+.B 1. Registration
+Plugin registered with PluginManager at startup
+.TP
+.B 2. Validation
+validate_config() called when connection loaded
+.TP
+.B 3. Preparation
+prepare() called before activation (optional)
+.TP
+.B 4. Activation
+activate() called to bring connection up
+.TP
+.B 5. Monitoring
+status() polled periodically
+.TP
+.B 6. Deactivation
+deactivate() called to bring connection down
+.TP
+.B 7. Cleanup
+cleanup() called after deactivation (optional)
+.SH BUILT-IN PLUGINS
+netctl includes the following built-in plugins:
+.TP
+.B BridgePlugin
+Linux bridge devices
+.TP
+.B VlanPlugin
+802.1Q VLAN interfaces
+.TP
+.B OpenVpnPlugin
+OpenVPN connections
+.TP
+.B WireGuardPlugin
+WireGuard VPN
+.TP
+.B TunTapPlugin
+TUN/TAP devices
+.SH FILES
+.TP
+.I src/plugin/traits.rs
+Plugin trait definitions
+.TP
+.I src/plugin/manager.rs
+Plugin manager implementation
+.TP
+.I src/plugin/loader.rs
+Plugin loading logic
+.TP
+.I src/plugin/*.rs
+Built-in plugin implementations
+.TP
+.I /etc/netctl/plugins/
+Plugin configuration directory
+.SH SEE ALSO
+.BR netctl (1),
+.BR netctl.nctl (5)
+.PP
+Rust async programming: https://rust-lang.github.io/async-book/
+.PP
+Tokio runtime: https://tokio.rs/
+.SH AUTHOR
+Written for the netctl project.
+.SH COPYRIGHT
+Copyright \(co 2025. License: MIT OR Apache-2.0

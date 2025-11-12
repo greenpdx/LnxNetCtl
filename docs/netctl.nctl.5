@@ -1,0 +1,269 @@
+.TH NETCTL.NCTL 5 "2025" "netctl" "File Formats"
+.SH NAME
+netctl.nctl \- netctl connection configuration file format
+.SH DESCRIPTION
+.B .nctl
+files define network connection configurations in TOML format.
+They are stored in
+.I /etc/netctl/
+and can be managed with the
+.BR netctl (1)
+command.
+.SH FILE FORMAT
+Configuration files use TOML syntax with the following sections:
+.SS [connection]
+Connection metadata and settings.
+.TP
+.B name
+Connection name (string, required)
+.TP
+.B uuid
+Unique identifier (UUID string, required)
+.TP
+.B type
+Connection type: "ethernet", "wifi", "bridge", "vlan", "vpn" (string, required)
+.TP
+.B autoconnect
+Auto-connect on boot (boolean, default: true)
+.TP
+.B interface-name
+Physical interface name (string, optional)
+.SS [ethernet]
+Ethernet-specific settings (for type="ethernet").
+.TP
+.B mac-address
+Bind to specific MAC address (string, optional)
+.SS [wifi]
+WiFi-specific settings (for type="wifi").
+.TP
+.B ssid
+Network SSID (string, required)
+.TP
+.B mode
+WiFi mode: "infrastructure" or "ap" (string, default: "infrastructure")
+.TP
+.B band
+Frequency band: "2.4GHz" or "5GHz" (string, optional)
+.TP
+.B channel
+WiFi channel number (integer, optional)
+.SS [wifi-security]
+WiFi security settings (for type="wifi").
+.TP
+.B key-mgmt
+Key management: "none", "wpa-psk", "wpa-eap" (string, required)
+.TP
+.B psk
+Pre-shared key for WPA-PSK (string, conditional)
+.TP
+.B auth-alg
+Authentication algorithm: "open", "shared" (string, optional)
+.SS [ipv4]
+IPv4 configuration.
+.TP
+.B method
+Configuration method: "auto" (DHCP), "manual", "link-local", "disabled" (string, required)
+.TP
+.B address
+Static IP address (string, conditional)
+.TP
+.B prefix
+Network prefix length (integer, conditional)
+.TP
+.B gateway
+Default gateway (string, optional)
+.TP
+.B dns
+DNS servers (array of strings, optional)
+.SS [ipv6]
+IPv6 configuration.
+.TP
+.B method
+Configuration method: "auto", "manual", "link-local", "disabled" (string, required)
+.TP
+.B address
+Static IPv6 address (string, conditional)
+.TP
+.B prefix
+Network prefix length (integer, conditional)
+.TP
+.B gateway
+Default gateway (string, optional)
+.TP
+.B dns
+DNS servers (array of strings, optional)
+.SS [bridge]
+Bridge settings (for type="bridge").
+.TP
+.B interfaces
+Bridge member interfaces (array of strings, required)
+.TP
+.B stp
+Enable Spanning Tree Protocol (boolean, default: false)
+.SS [vlan]
+VLAN settings (for type="vlan").
+.TP
+.B parent
+Parent interface (string, required)
+.TP
+.B id
+VLAN ID (integer 1-4094, required)
+.SS [vpn]
+VPN settings (for type="vpn").
+.TP
+.B vpn-type
+VPN type: "openvpn", "wireguard" (string, required)
+.TP
+.B config-file
+Path to VPN configuration file (string, required)
+.SH EXAMPLES
+.SS Ethernet with DHCP
+.EX
+[connection]
+name = "Ethernet DHCP"
+uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+type = "ethernet"
+autoconnect = true
+interface-name = "eth0"
+
+[ipv4]
+method = "auto"
+
+[ipv6]
+method = "auto"
+.EE
+.SS Ethernet with Static IP
+.EX
+[connection]
+name = "Ethernet Static"
+uuid = "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+type = "ethernet"
+autoconnect = true
+interface-name = "eth0"
+
+[ipv4]
+method = "manual"
+address = "192.168.1.100"
+prefix = 24
+gateway = "192.168.1.1"
+dns = ["8.8.8.8", "8.8.4.4"]
+
+[ipv6]
+method = "disabled"
+.EE
+.SS WiFi with WPA-PSK
+.EX
+[connection]
+name = "Home WiFi"
+uuid = "c3d4e5f6-a7b8-9012-cdef-123456789012"
+type = "wifi"
+autoconnect = true
+interface-name = "wlan0"
+
+[wifi]
+ssid = "MyHomeNetwork"
+mode = "infrastructure"
+
+[wifi-security]
+key-mgmt = "wpa-psk"
+psk = "mypassword123"
+
+[ipv4]
+method = "auto"
+
+[ipv6]
+method = "auto"
+.EE
+.SS WiFi Access Point
+.EX
+[connection]
+name = "WiFi AP"
+uuid = "d4e5f6a7-b8c9-0123-def1-234567890123"
+type = "wifi"
+autoconnect = false
+interface-name = "wlan0"
+
+[wifi]
+ssid = "MyAccessPoint"
+mode = "ap"
+band = "2.4GHz"
+channel = 6
+
+[wifi-security]
+key-mgmt = "wpa-psk"
+psk = "secret123"
+
+[ipv4]
+method = "manual"
+address = "10.255.24.1"
+prefix = 24
+.EE
+.SS Bridge
+.EX
+[connection]
+name = "Bridge"
+uuid = "e5f6a7b8-c9d0-1234-ef12-345678901234"
+type = "bridge"
+autoconnect = true
+
+[bridge]
+interfaces = ["eth0", "eth1"]
+stp = true
+
+[ipv4]
+method = "auto"
+
+[ipv6]
+method = "disabled"
+.EE
+.SS VLAN
+.EX
+[connection]
+name = "VLAN 100"
+uuid = "f6a7b8c9-d0e1-2345-f123-456789012345"
+type = "vlan"
+autoconnect = true
+
+[vlan]
+parent = "eth0"
+id = 100
+
+[ipv4]
+method = "auto"
+
+[ipv6]
+method = "disabled"
+.EE
+.SS OpenVPN
+.EX
+[connection]
+name = "Corporate VPN"
+uuid = "a7b8c9d0-e1f2-3456-1234-567890123456"
+type = "vpn"
+autoconnect = false
+
+[vpn]
+vpn-type = "openvpn"
+config-file = "/etc/openvpn/client.ovpn"
+
+[ipv4]
+method = "auto"
+
+[ipv6]
+method = "disabled"
+.EE
+.SH FILES
+.TP
+.I /etc/netctl/*.nctl
+User connection configurations
+.TP
+.I /usr/share/doc/netctl/examples/*.nctl
+Example configurations
+.SH SEE ALSO
+.BR netctl (1),
+.BR nm-converter (1),
+.BR toml (5)
+.SH AUTHOR
+Written for the netctl project.
+.SH COPYRIGHT
+Copyright \(co 2025. License: MIT OR Apache-2.0

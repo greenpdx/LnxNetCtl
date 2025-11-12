@@ -1,0 +1,169 @@
+.TH NETCTL 1 "2025" "netctl" "User Commands"
+.SH NAME
+netctl \- async network management tool with NetworkManager compatibility
+.SH SYNOPSIS
+.B netctl
+[\fIOPTIONS\fR] \fICOMMAND\fR [\fIARGS\fR]
+.SH DESCRIPTION
+.B netctl
+is an async network management tool built on tokio for high performance.
+It provides interface management, WiFi support, access point mode, DHCP server configuration,
+DNS management, routing control, and NetworkManager D-Bus compatibility.
+.SH COMMANDS
+.SS Device Management
+.TP
+.B device list
+List all network devices
+.SS Interface Management
+.TP
+.B interface list
+List all network interfaces
+.TP
+.B interface show \fIINTERFACE\fR
+Show detailed information about an interface
+.TP
+.B interface up \fIINTERFACE\fR
+Bring an interface up
+.TP
+.B interface down \fIINTERFACE\fR
+Bring an interface down
+.TP
+.B interface set-ip \fIINTERFACE\fR \fIADDRESS\fR --prefix \fIPREFIX\fR
+Set IP address on an interface
+.TP
+.B interface del-ip \fIINTERFACE\fR \fIADDRESS\fR --prefix \fIPREFIX\fR
+Delete IP address from an interface
+.TP
+.B interface set-mac \fIINTERFACE\fR \fIMAC\fR
+Set MAC address on an interface
+.TP
+.B interface set-mtu \fIINTERFACE\fR \fIMTU\fR
+Set MTU on an interface
+.SS WiFi Operations
+.TP
+.B wifi list
+List all WiFi interfaces
+.TP
+.B wifi scan \fIINTERFACE\fR
+Scan for WiFi networks
+.TP
+.B wifi info \fIINTERFACE\fR
+Show WiFi device information
+.TP
+.B wifi get-reg
+Get regulatory domain
+.TP
+.B wifi set-reg \fICOUNTRY\fR
+Set regulatory domain (e.g., US, GB, JP)
+.TP
+.B wifi get-txpower \fIINTERFACE\fR
+Get TX power
+.TP
+.B wifi set-txpower \fIINTERFACE\fR \fIPOWER\fR
+Set TX power (e.g., 20dBm)
+.SS Access Point
+.TP
+.B ap start \fIINTERFACE\fR --ssid \fISSID\fR [--password \fIPASSWORD\fR] [--channel \fICHANNEL\fR] [--band \fIBAND\fR]
+Start access point mode
+.TP
+.B ap stop
+Stop access point
+.TP
+.B ap status
+Show access point status
+.SS DHCP Server
+.TP
+.B dhcp start \fIINTERFACE\fR --range-start \fIIP\fR --range-end \fIIP\fR --gateway \fIIP\fR --dns \fIIP\fR
+Start DHCP server with dora
+.TP
+.B dhcp write-config \fIINTERFACE\fR --range-start \fIIP\fR --range-end \fIIP\fR --gateway \fIIP\fR --dns \fIIP\fR
+Write DHCP configuration file
+.SS Routing
+.TP
+.B route add-default \fIGATEWAY\fR [--interface \fIINTERFACE\fR]
+Add default route
+.SS Connection Management
+.TP
+.B connection list
+List saved connections
+.TP
+.B connection up \fINAME\fR
+Activate a connection
+.TP
+.B connection down \fINAME\fR
+Deactivate a connection
+.TP
+.B connection delete \fINAME\fR
+Delete a connection
+.SH OPTIONS
+.TP
+.B -h, --help
+Print help information
+.TP
+.B -V, --version
+Print version information
+.SH FILES
+.TP
+.I /etc/netctl/
+Configuration directory
+.TP
+.I /etc/netctl/*.nctl
+Connection configuration files
+.TP
+.I /usr/share/doc/netctl/examples/
+Example configuration files
+.TP
+.I /run/netctl/
+Runtime state directory
+.TP
+.I /run/netctl/hostapd.conf
+Generated hostapd configuration
+.TP
+.I /run/netctl/dora.yaml
+Generated dora DHCP configuration
+.SH EXAMPLES
+.TP
+List all network interfaces:
+.EX
+netctl interface list
+.EE
+.TP
+Scan for WiFi networks:
+.EX
+netctl wifi scan wlan0
+.EE
+.TP
+Start an access point:
+.EX
+netctl ap start wlan0 --ssid "MyAP" --password "secret123" --channel 6
+.EE
+.TP
+Configure DHCP server:
+.EX
+netctl dhcp start wlan0 --range-start 10.255.24.10 \\
+    --range-end 10.255.24.250 --gateway 10.255.24.1 --dns 10.255.24.1
+.EE
+.TP
+Set IP address:
+.EX
+netctl interface set-ip eth0 192.168.1.100 --prefix 24
+.EE
+.TP
+Set regulatory domain:
+.EX
+netctl wifi set-reg US
+.EE
+.SH SEE ALSO
+.BR netctl.nctl (5),
+.BR nm-converter (1),
+.BR netctl-plugin (7),
+.BR ip (8),
+.BR iw (8),
+.BR hostapd (8),
+.BR dora (1)
+.SH AUTHOR
+Written for the netctl project.
+.SH REPORTING BUGS
+Report bugs via GitHub issues.
+.SH COPYRIGHT
+Copyright \(co 2025. License: MIT OR Apache-2.0

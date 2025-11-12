@@ -1,0 +1,59 @@
+#!/usr/bin/make -f
+# See debhelper(7) (uncomment to enable)
+# output every command that modifies files on the build system.
+#export DH_VERBOSE = 1
+
+# see FEATURE AREAS in dpkg-buildflags(1)
+#export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+# see ENVIRONMENT in dpkg-buildflags(1)
+# package maintainers to append CFLAGS
+#export DEB_CFLAGS_MAINT_APPEND  = -Wall -pedantic
+# package maintainers to append LDFLAGS
+#export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
+
+%:
+	dh $@
+
+override_dh_auto_clean:
+	cargo clean || true
+
+override_dh_auto_build:
+	cargo build --release --bins
+
+override_dh_auto_test:
+	# Skip tests during package build
+	# cargo test --release
+
+override_dh_auto_install:
+	# Install binaries
+	install -D -m 0755 target/release/netctl debian/netctl/usr/bin/netctl
+	install -D -m 0755 target/release/nm-converter debian/netctl/usr/bin/nm-converter
+
+	# Install systemd services
+	install -D -m 0644 systemd/netctl.service debian/netctl/lib/systemd/system/netctl.service
+	install -D -m 0644 systemd/netctl@.service debian/netctl/lib/systemd/system/netctl@.service
+	install -D -m 0644 systemd/netctl-auto@.service debian/netctl/lib/systemd/system/netctl-auto@.service
+
+	# Install man pages
+	install -D -m 0644 docs/netctl.1 debian/netctl/usr/share/man/man1/netctl.1
+	install -D -m 0644 docs/nm-converter.1 debian/netctl/usr/share/man/man1/nm-converter.1
+	install -D -m 0644 docs/netctl.nctl.5 debian/netctl/usr/share/man/man5/netctl.nctl.5
+	install -D -m 0644 docs/netctl-plugin.7 debian/netctl/usr/share/man/man7/netctl-plugin.7
+
+	# Install example configs
+	install -D -m 0644 config/examples/ethernet-dhcp.nctl debian/netctl/usr/share/doc/netctl/examples/ethernet-dhcp.nctl
+	install -D -m 0644 config/examples/wifi-dhcp.nctl debian/netctl/usr/share/doc/netctl/examples/wifi-dhcp.nctl
+	install -D -m 0644 config/examples/wifi-wpa.nctl debian/netctl/usr/share/doc/netctl/examples/wifi-wpa.nctl
+	install -D -m 0644 config/examples/ethernet-static.nmconnection debian/netctl/usr/share/doc/netctl/examples/ethernet-static.nmconnection
+	install -D -m 0644 config/examples/wifi-wpa.nmconnection debian/netctl/usr/share/doc/netctl/examples/wifi-wpa.nmconnection
+	install -D -m 0644 config/examples/vpn-openvpn.nctl debian/netctl/usr/share/doc/netctl/examples/vpn-openvpn.nctl
+	install -D -m 0644 config/examples/vpn-openvpn.nmconnection debian/netctl/usr/share/doc/netctl/examples/vpn-openvpn.nmconnection
+
+	# Install documentation
+	install -D -m 0644 README.md debian/netctl/usr/share/doc/netctl/README.md
+	install -D -m 0644 systemd/README.md debian/netctl/usr/share/doc/netctl/systemd-README.md
+
+	# Create config directory
+	install -d -m 0755 debian/netctl/etc/netctl
+	install -d -m 0755 debian/netctl/etc/netctl/plugins

@@ -1,0 +1,172 @@
+.TH NM-CONVERTER 1 "2025" "netctl" "User Commands"
+.SH NAME
+nm-converter \- convert NetworkManager configuration files to netctl format
+.SH SYNOPSIS
+.B nm-converter
+[\fIOPTIONS\fR] \fIFILE\fR
+.SH DESCRIPTION
+.B nm-converter
+converts NetworkManager .nmconnection files to netctl .nctl format.
+This tool helps migrate from NetworkManager to netctl by converting existing
+network configurations.
+.PP
+The converter supports most common NetworkManager configuration options including
+ethernet, WiFi, bridge, VLAN, and VPN connections. Some advanced or
+NetworkManager-specific features may not be fully supported.
+.SH OPTIONS
+.TP
+.B -o, --output \fIFILE\fR
+Write output to FILE instead of stdout
+.TP
+.B -d, --directory \fIDIR\fR
+Convert all .nmconnection files in DIR
+.TP
+.B --output-dir \fIDIR\fR
+Output directory for batch conversion (used with --directory)
+.TP
+.B -v, --verbose
+Enable verbose output showing conversion details
+.TP
+.B --dry-run
+Show what would be converted without writing files
+.TP
+.B -h, --help
+Print help information
+.TP
+.B -V, --version
+Print version information
+.SH FILE FORMAT
+.SS Input Format
+NetworkManager .nmconnection files use INI-style key-value format with sections:
+.IP \[bu] 2
+[connection] - connection metadata
+.IP \[bu]
+[ethernet] - ethernet settings
+.IP \[bu]
+[wifi] - WiFi settings
+.IP \[bu]
+[ipv4] - IPv4 configuration
+.IP \[bu]
+[ipv6] - IPv6 configuration
+.IP \[bu]
+And others...
+.SS Output Format
+netctl .nctl files use TOML format. See
+.BR netctl.nctl (5)
+for complete format specification.
+.SH CONVERSION DETAILS
+.SS Supported Features
+.TP
+.B Connection types
+Ethernet, WiFi (infrastructure and AP), bridge, VLAN, OpenVPN, WireGuard
+.TP
+.B IP configuration
+DHCP (auto), static addresses, gateway, DNS servers, IPv4 and IPv6
+.TP
+.B WiFi security
+Open, WPA-PSK, WPA2-PSK, WPA3-SAE
+.TP
+.B Bridge settings
+Member interfaces, STP
+.TP
+.B VLAN settings
+Parent interface, VLAN ID
+.SS Unsupported Features
+.TP
+.B WiFi 802.1X/Enterprise
+WPA-EAP configurations require manual setup
+.TP
+.B Advanced routing
+Policy routing, multiple routing tables
+.TP
+.B Team interfaces
+NetworkManager team devices (use bridge instead)
+.TP
+.B Advanced VPN
+L2TP, PPTP, strongSwan (only OpenVPN and WireGuard supported)
+.SH EXAMPLES
+.TP
+Convert a single file:
+.EX
+nm-converter /etc/NetworkManager/system-connections/WiFi.nmconnection
+.EE
+.TP
+Convert to specific output file:
+.EX
+nm-converter -o /etc/netctl/wifi.nctl \\
+    /etc/NetworkManager/system-connections/WiFi.nmconnection
+.EE
+.TP
+Convert all files in directory:
+.EX
+nm-converter -d /etc/NetworkManager/system-connections \\
+    --output-dir /etc/netctl
+.EE
+.TP
+Dry run to preview conversion:
+.EX
+nm-converter --dry-run -v \\
+    /etc/NetworkManager/system-connections/Ethernet.nmconnection
+.EE
+.TP
+Batch convert with verbose output:
+.EX
+nm-converter -v -d /etc/NetworkManager/system-connections \\
+    --output-dir /etc/netctl
+.EE
+.SH EXIT STATUS
+.TP
+.B 0
+Conversion successful
+.TP
+.B 1
+Invalid arguments or file not found
+.TP
+.B 2
+Parse error in input file
+.TP
+.B 3
+Unsupported configuration detected
+.TP
+.B 4
+Write error
+.SH FILES
+.TP
+.I /etc/NetworkManager/system-connections/*.nmconnection
+NetworkManager system connection files
+.TP
+.I /etc/netctl/*.nctl
+netctl connection configuration files
+.TP
+.I /usr/share/doc/netctl/examples/*.nmconnection
+Example NetworkManager configurations
+.SH NOTES
+.SS Post-Conversion Steps
+After converting configurations:
+.IP 1. 3
+Review converted .nctl files for accuracy
+.IP 2.
+Test connections with
+.B netctl connection up
+.IP 3.
+Disable NetworkManager if switching permanently
+.IP 4.
+Enable netctl systemd services if needed
+.SS UUID Preservation
+The converter preserves UUIDs from NetworkManager configurations when possible.
+This helps maintain consistency across tools.
+.SS Passwords and Secrets
+NetworkManager stores passwords separately in keyring files. The converter
+will indicate when passwords need to be manually added to .nctl files.
+.SH SEE ALSO
+.BR netctl (1),
+.BR netctl.nctl (5),
+.BR NetworkManager (8),
+.BR nmcli (1)
+.SH AUTHOR
+Written for the netctl project.
+.SH REPORTING BUGS
+Report bugs via GitHub issues. Include input .nmconnection file when reporting
+conversion issues.
+.SH COPYRIGHT
+Copyright \(co 2025. License: MIT OR Apache-2.0
