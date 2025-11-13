@@ -3,6 +3,7 @@
 //! Low-level WiFi management using iw command
 
 use crate::error::{NetctlError, NetctlResult};
+use crate::validation;
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 
@@ -45,6 +46,7 @@ impl WifiController {
 
     /// Get WiFi device information
     pub async fn get_dev_info(&self, interface: &str) -> NetctlResult<WifiDeviceInfo> {
+        validation::validate_interface_name(interface)?;
         let output = self.run_iw(&["dev", interface, "info"]).await?;
 
         let mut info = WifiDeviceInfo {
@@ -125,12 +127,7 @@ impl WifiController {
 
     /// Set regulatory domain
     pub async fn set_reg_domain(&self, country: &str) -> NetctlResult<()> {
-        if country.len() != 2 {
-            return Err(NetctlError::InvalidParameter(
-                "Country code must be 2 characters".to_string()
-            ));
-        }
-
+        validation::validate_country_code(country)?;
         self.run_iw_no_output(&["reg", "set", country]).await
     }
 
@@ -142,24 +139,28 @@ impl WifiController {
 
     /// Set transmit power (in dBm or mW)
     pub async fn set_txpower(&self, interface: &str, power: &str) -> NetctlResult<()> {
+        validation::validate_interface_name(interface)?;
         // power can be like "20dBm" or "fixed 100mW" or "auto"
         self.run_iw_no_output(&["dev", interface, "set", "txpower", power]).await
     }
 
     /// Set power save mode
     pub async fn set_power_save(&self, interface: &str, enable: bool) -> NetctlResult<()> {
+        validation::validate_interface_name(interface)?;
         let mode = if enable { "on" } else { "off" };
         self.run_iw_no_output(&["dev", interface, "set", "power_save", mode]).await
     }
 
     /// Get power save status
     pub async fn get_power_save(&self, interface: &str) -> NetctlResult<bool> {
+        validation::validate_interface_name(interface)?;
         let output = self.run_iw(&["dev", interface, "get", "power_save"]).await?;
         Ok(output.contains("Power save: on"))
     }
 
     /// Scan for WiFi networks
     pub async fn scan(&self, interface: &str) -> NetctlResult<Vec<ScanResult>> {
+        validation::validate_interface_name(interface)?;
         // Get scan results (will trigger scan if needed)
         let output = self.run_iw(&["dev", interface, "scan"]).await?;
 

@@ -3,6 +3,7 @@
 //! Configuration generation and control for hostapd
 
 use crate::error::{NetctlError, NetctlResult};
+use crate::validation;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 use std::path::{Path, PathBuf};
@@ -81,12 +82,26 @@ impl HostapdController {
 
     /// Generate hostapd configuration file
     pub fn generate_config(&self, config: &AccessPointConfig) -> NetctlResult<String> {
+        // Validate all user-provided configuration values
+        validation::validate_interface_name(&config.interface)?;
+        validation::validate_ssid(&config.ssid)?;
+        validation::validate_country_code(&config.country_code)?;
+
+        // Determine band for channel validation
+        let band_str = if config.band == "5GHz" { "5GHz" } else { "2.4GHz" };
+        validation::validate_wifi_channel(config.channel, band_str)?;
+
         let mut conf = String::new();
 
-        conf.push_str(&format!("interface={}\n", config.interface));
+        // Use sanitized values for config generation
+        let interface = validation::sanitize_config_value(&config.interface)?;
+        let ssid = validation::sanitize_config_value(&config.ssid)?;
+        let country = validation::sanitize_config_value(&config.country_code)?;
+
+        conf.push_str(&format!("interface={}\n", interface));
         conf.push_str("driver=nl80211\n");
-        conf.push_str(&format!("ssid={}\n", config.ssid));
-        conf.push_str(&format!("country_code={}\n", config.country_code));
+        conf.push_str(&format!("ssid={}\n", ssid));
+        conf.push_str(&format!("country_code={}\n", country));
 
         let hw_mode = if config.band == "5GHz" { "a" } else { "g" };
         conf.push_str(&format!("hw_mode={}\n", hw_mode));
@@ -97,13 +112,10 @@ impl HostapdController {
         }
 
         if let Some(ref password) = config.password {
-            if password.len() < 8 {
-                return Err(NetctlError::InvalidParameter(
-                    "Password must be at least 8 characters".to_string()
-                ));
-            }
+            validation::validate_wifi_password(password)?;
+            let pass = validation::sanitize_config_value(password)?;
             conf.push_str("wpa=2\nwpa_passphrase=");
-            conf.push_str(password);
+            conf.push_str(&pass);
             conf.push_str("\nwpa_key_mgmt=WPA-PSK\nwpa_pairwise=CCMP\nrsn_pairwise=CCMP\n");
         }
 
@@ -142,9 +154,13 @@ impl HostapdController {
     pub async fn write_config(&self, config: &AccessPointConfig) -> NetctlResult<PathBuf> {
         let conf_content = self.generate_config(config)?;
         let conf_path = self.config_dir.join("hostapd.conf");
+
+        // Validate the config path to prevent path traversal
+        let validated_path = validation::validate_config_path(&conf_path, &self.config_dir)?;
+
         fs::create_dir_all(&self.config_dir).await?;
-        fs::write(&conf_path, conf_content).await?;
-        Ok(conf_path)
+        fs::write(&validated_path, conf_content).await?;
+        Ok(validated_path)
     }
 
     pub async fn start(&self, config: &AccessPointConfig) -> NetctlResult<()> {
@@ -189,6 +205,26 @@ impl HostapdController {
         let pid_str = fs::read_to_string(&self.pid_file).await?;
         let pid: i32 = pid_str.trim().parse()
             .map_err(|_| NetctlError::ServiceError("Invalid PID".to_string()))?;
+
+        // CRITICAL SECURITY FIX: Verify the PID actually belongs to hostapd before killing
+        // This prevents arbitrary process termination via PID file manipulation
+        let cmdline_path = format!("/proc/{}/cmdline", pid);
+        match fs::read_to_string(&cmdline_path).await {
+            Ok(cmdline) => {
+                if !cmdline.contains("hostapd") {
+                    return Err(NetctlError::ServiceError(
+                        "PID file does not point to hostapd process".to_string()
+                    ));
+                }
+            }
+            Err(_) => {
+                // Process does not exist
+                let _ = fs::remove_file(&self.pid_file).await;
+                return Err(NetctlError::ServiceError(
+                    "Process does not exist".to_string()
+                ));
+            }
+        }
 
         Command::new("kill").arg("-TERM").arg(pid.to_string()).output().await?;
 
