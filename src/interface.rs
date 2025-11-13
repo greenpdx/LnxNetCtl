@@ -3,10 +3,10 @@
 //! Low-level interface management using ip command and sysfs
 
 use crate::error::{NetctlError, NetctlResult};
+use crate::validation;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use tokio::process::Command;
-use tokio::io::{AsyncReadExt};
 use tokio::fs;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -76,6 +76,9 @@ impl InterfaceController {
 
     /// Get detailed interface information
     pub async fn get_info(&self, interface: &str) -> NetctlResult<InterfaceInfo> {
+        // Validate interface name to prevent command injection
+        validation::validate_interface_name(interface)?;
+
         // Verify interface exists
         let sys_path = format!("/sys/class/net/{}", interface);
         if !Path::new(&sys_path).exists() {
@@ -111,16 +114,22 @@ impl InterfaceController {
 
     /// Bring interface up
     pub async fn up(&self, interface: &str) -> NetctlResult<()> {
+        validation::validate_interface_name(interface)?;
         self.run_ip(&["link", "set", "dev", interface, "up"]).await
     }
 
     /// Bring interface down
     pub async fn down(&self, interface: &str) -> NetctlResult<()> {
+        validation::validate_interface_name(interface)?;
         self.run_ip(&["link", "set", "dev", interface, "down"]).await
     }
 
     /// Set IP address
     pub async fn set_ip(&self, interface: &str, address: &str, prefix_len: u8) -> NetctlResult<()> {
+        validation::validate_interface_name(interface)?;
+        let ip = validation::validate_ip_address(address)?;
+        validation::validate_prefix_len(prefix_len, ip.is_ipv6())?;
+
         let addr = format!("{}/{}", address, prefix_len);
         self.run_ip(&["addr", "add", &addr, "dev", interface]).await
     }
@@ -132,17 +141,25 @@ impl InterfaceController {
 
     /// Delete IP address
     pub async fn del_ip(&self, interface: &str, address: &str, prefix_len: u8) -> NetctlResult<()> {
+        validation::validate_interface_name(interface)?;
+        let ip = validation::validate_ip_address(address)?;
+        validation::validate_prefix_len(prefix_len, ip.is_ipv6())?;
+
         let addr = format!("{}/{}", address, prefix_len);
         self.run_ip(&["addr", "del", &addr, "dev", interface]).await
     }
 
     /// Flush all IP addresses
     pub async fn flush_addrs(&self, interface: &str) -> NetctlResult<()> {
+        validation::validate_interface_name(interface)?;
         self.run_ip(&["addr", "flush", "dev", interface]).await
     }
 
     /// Set MAC address
     pub async fn set_mac(&self, interface: &str, mac: &str) -> NetctlResult<()> {
+        validation::validate_interface_name(interface)?;
+        validation::validate_mac_address(mac)?;
+
         // Must bring interface down first
         self.down(interface).await?;
         self.run_ip(&["link", "set", "dev", interface, "address", mac]).await?;
@@ -152,36 +169,50 @@ impl InterfaceController {
 
     /// Set MTU
     pub async fn set_mtu(&self, interface: &str, mtu: u32) -> NetctlResult<()> {
+        validation::validate_interface_name(interface)?;
+        validation::validate_mtu(mtu)?;
+
         let mtu_str = mtu.to_string();
         self.run_ip(&["link", "set", "dev", interface, "mtu", &mtu_str]).await
     }
 
     /// Set transmit queue length
     pub async fn set_txqueuelen(&self, interface: &str, len: u32) -> NetctlResult<()> {
+        validation::validate_interface_name(interface)?;
+
         let len_str = len.to_string();
         self.run_ip(&["link", "set", "dev", interface, "txqueuelen", &len_str]).await
     }
 
     /// Set promiscuous mode
     pub async fn set_promisc(&self, interface: &str, enable: bool) -> NetctlResult<()> {
+        validation::validate_interface_name(interface)?;
+
         let mode = if enable { "on" } else { "off" };
         self.run_ip(&["link", "set", "dev", interface, "promisc", mode]).await
     }
 
     /// Set multicast
     pub async fn set_multicast(&self, interface: &str, enable: bool) -> NetctlResult<()> {
+        validation::validate_interface_name(interface)?;
+
         let mode = if enable { "on" } else { "off" };
         self.run_ip(&["link", "set", "dev", interface, "multicast", mode]).await
     }
 
     /// Set all multicast
     pub async fn set_allmulticast(&self, interface: &str, enable: bool) -> NetctlResult<()> {
+        validation::validate_interface_name(interface)?;
+
         let mode = if enable { "on" } else { "off" };
         self.run_ip(&["link", "set", "dev", interface, "allmulticast", mode]).await
     }
 
     /// Rename interface
     pub async fn rename(&self, old_name: &str, new_name: &str) -> NetctlResult<()> {
+        validation::validate_interface_name(old_name)?;
+        validation::validate_interface_name(new_name)?;
+
         // Must be down to rename
         self.down(old_name).await?;
         self.run_ip(&["link", "set", "dev", old_name, "name", new_name]).await?;

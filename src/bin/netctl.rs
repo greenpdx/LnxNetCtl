@@ -5,6 +5,7 @@
 
 use clap::{Parser, Subcommand};
 use netctl::*;
+use netctl::validation;
 use serde_json;
 use std::path::PathBuf;
 use std::process;
@@ -616,6 +617,9 @@ async fn handle_monitor(cmd: &MonitorCommands, cli: &Cli) -> NetctlResult<()> {
 async fn handle_debug(cmd: &DebugCommands, _cli: &Cli) -> NetctlResult<()> {
     match cmd {
         DebugCommands::Ping { host, count } => {
+            // Validate hostname to prevent command injection
+            validation::validate_hostname(host)?;
+
             println!("Pinging {} {} times...", host, count);
             let count_str = count.to_string();
             let output = tokio::process::Command::new("ping")
@@ -632,6 +636,9 @@ async fn handle_debug(cmd: &DebugCommands, _cli: &Cli) -> NetctlResult<()> {
             println!("{}", stdout);
         }
         DebugCommands::Tcpdump { interface, filter, output } => {
+            // Validate interface name to prevent command injection
+            validation::validate_interface_name(interface)?;
+
             println!("Starting packet capture on {}...", interface);
             let mut args = vec!["-i", interface.as_str()];
             if let Some(ref f) = filter {

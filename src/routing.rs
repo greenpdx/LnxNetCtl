@@ -1,6 +1,7 @@
 //! Routing table management
 
 use crate::error::{NetctlError, NetctlResult};
+use crate::validation;
 use tokio::process::Command;
 
 pub struct RoutingController;
@@ -11,6 +12,11 @@ impl RoutingController {
     }
 
     pub async fn add_default_gateway(&self, gateway: &str, interface: Option<&str>) -> NetctlResult<()> {
+        validation::validate_ip_address(gateway)?;
+        if let Some(iface) = interface {
+            validation::validate_interface_name(iface)?;
+        }
+
         let mut args = vec!["route", "add", "default", "via", gateway];
         if let Some(iface) = interface {
             args.extend_from_slice(&["dev", iface]);
