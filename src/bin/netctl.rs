@@ -265,7 +265,8 @@ async fn handle_device(cmd: &DeviceCommands, cli: &Cli) -> NetctlResult<()> {
         DeviceCommands::List => {
             let interfaces = iface_ctrl.list().await?;
             if cli.output == "json" {
-                println!("{}", serde_json::to_string_pretty(&interfaces).unwrap());
+                println!("{}", serde_json::to_string_pretty(&interfaces)
+                    .map_err(|e| NetctlError::ParseError(format!("JSON serialization error: {}", e)))?);
             } else {
                 println!("DEVICE");
                 for iface in interfaces {
@@ -276,7 +277,8 @@ async fn handle_device(cmd: &DeviceCommands, cli: &Cli) -> NetctlResult<()> {
         DeviceCommands::Show { interface } | DeviceCommands::Status { interface } => {
             let info = iface_ctrl.get_info(&interface).await?;
             if cli.output == "json" {
-                println!("{}", serde_json::to_string_pretty(&info).unwrap());
+                println!("{}", serde_json::to_string_pretty(&info)
+                    .map_err(|e| NetctlError::ParseError(format!("JSON serialization error: {}", e)))?);
             } else {
                 println!("Device: {}", info.name);
                 if let Some(mac) = &info.mac_address {
@@ -307,7 +309,8 @@ async fn handle_interface(cmd: &InterfaceCommands, cli: &Cli) -> NetctlResult<()
         InterfaceCommands::List => {
             let interfaces = iface_ctrl.list().await?;
             if cli.output == "json" {
-                println!("{}", serde_json::to_string_pretty(&interfaces).unwrap());
+                println!("{}", serde_json::to_string_pretty(&interfaces)
+                    .map_err(|e| NetctlError::ParseError(format!("JSON serialization error: {}", e)))?);
             } else {
                 println!("INTERFACE");
                 for iface in interfaces {
@@ -321,7 +324,8 @@ async fn handle_interface(cmd: &InterfaceCommands, cli: &Cli) -> NetctlResult<()
         InterfaceCommands::Show { interface } => {
             let info = iface_ctrl.get_info(&interface).await?;
             if cli.output == "json" {
-                println!("{}", serde_json::to_string_pretty(&info).unwrap());
+                println!("{}", serde_json::to_string_pretty(&info)
+                    .map_err(|e| NetctlError::ParseError(format!("JSON serialization error: {}", e)))?);
             } else {
                 println!("{}: <{}>", info.name, info.flags.join(","));
                 if let Some(mac) = &info.mac_address {
@@ -388,7 +392,8 @@ async fn handle_wifi(cmd: &WifiCommands, cli: &Cli) -> NetctlResult<()> {
                 .collect();
 
             if cli.output == "json" {
-                println!("{}", serde_json::to_string_pretty(&wifi_ifaces).unwrap());
+                println!("{}", serde_json::to_string_pretty(&wifi_ifaces)
+                    .map_err(|e| NetctlError::ParseError(format!("JSON serialization error: {}", e)))?);
             } else {
                 println!("WIFI INTERFACE");
                 for iface in wifi_ifaces {
@@ -400,7 +405,8 @@ async fn handle_wifi(cmd: &WifiCommands, cli: &Cli) -> NetctlResult<()> {
             println!("Scanning on {}...", interface);
             let results = wifi_ctrl.scan(&interface).await?;
             if cli.output == "json" {
-                println!("{}", serde_json::to_string_pretty(&results).unwrap());
+                println!("{}", serde_json::to_string_pretty(&results)
+                    .map_err(|e| NetctlError::ParseError(format!("JSON serialization error: {}", e)))?);
             } else {
                 println!("SSID                             BSSID              FREQ    SIGNAL");
                 for result in results {
@@ -414,7 +420,8 @@ async fn handle_wifi(cmd: &WifiCommands, cli: &Cli) -> NetctlResult<()> {
         WifiCommands::Info { interface } => {
             let info = wifi_ctrl.get_dev_info(&interface).await?;
             if cli.output == "json" {
-                println!("{}", serde_json::to_string_pretty(&info).unwrap());
+                println!("{}", serde_json::to_string_pretty(&info)
+                    .map_err(|e| NetctlError::ParseError(format!("JSON serialization error: {}", e)))?);
             } else {
                 println!("Interface: {}", info.interface);
                 if let Some(phy) = &info.phy {
@@ -434,7 +441,8 @@ async fn handle_wifi(cmd: &WifiCommands, cli: &Cli) -> NetctlResult<()> {
         WifiCommands::GetReg => {
             let reg = wifi_ctrl.get_reg_domain().await?;
             if cli.output == "json" {
-                println!("{}", serde_json::to_string_pretty(&reg).unwrap());
+                println!("{}", serde_json::to_string_pretty(&reg)
+                    .map_err(|e| NetctlError::ParseError(format!("JSON serialization error: {}", e)))?);
             } else {
                 if let Some(country) = &reg.country {
                     println!("Country: {}", country);
@@ -556,13 +564,21 @@ async fn handle_route(cmd: &RouteCommands, _cli: &Cli) -> NetctlResult<()> {
     match cmd {
         RouteCommands::Show => {
             println!("Route table:");
-            let output = std::process::Command::new("ip")
+            let output = tokio::process::Command::new("ip")
                 .args(["route", "show"])
-                .output()?;
-            println!("{}", String::from_utf8_lossy(&output.stdout));
+                .output()
+                .await
+                .map_err(|e| NetctlError::CommandFailed {
+                    cmd: "ip route show".to_string(),
+                    code: None,
+                    stderr: e.to_string(),
+                })?;
+            let stdout = String::from_utf8(output.stdout)
+                .unwrap_or_else(|e| String::from_utf8_lossy(&e.into_bytes()).to_string());
+            println!("{}", stdout);
         }
         RouteCommands::AddDefault { gateway, interface } => {
-            route_ctrl.add_default_gateway(&gateway, interface.as_deref())?;
+            route_ctrl.add_default_gateway(&gateway, interface.as_deref()).await?;
             println!("Added default gateway {}", gateway);
         }
         RouteCommands::DelDefault => {
@@ -580,7 +596,8 @@ async fn handle_monitor(cmd: &MonitorCommands, cli: &Cli) -> NetctlResult<()> {
             let info = iface_ctrl.get_info(&interface).await?;
             if let Some(stats) = &info.stats {
                 if cli.output == "json" {
-                    println!("{}", serde_json::to_string_pretty(&stats).unwrap());
+                    println!("{}", serde_json::to_string_pretty(&stats)
+                        .map_err(|e| NetctlError::ParseError(format!("JSON serialization error: {}", e)))?);
                 } else {
                     println!("Statistics for {}:", interface);
                     println!("  RX: {} bytes, {} packets, {} errors, {} dropped",
@@ -600,28 +617,44 @@ async fn handle_debug(cmd: &DebugCommands, _cli: &Cli) -> NetctlResult<()> {
     match cmd {
         DebugCommands::Ping { host, count } => {
             println!("Pinging {} {} times...", host, count);
-            let output = std::process::Command::new("ping")
-                .args(["-c", &count.to_string(), &host])
-                .output()?;
-            println!("{}", String::from_utf8_lossy(&output.stdout));
+            let count_str = count.to_string();
+            let output = tokio::process::Command::new("ping")
+                .args(["-c", &count_str, host])
+                .output()
+                .await
+                .map_err(|e| NetctlError::CommandFailed {
+                    cmd: format!("ping -c {} {}", count, host),
+                    code: None,
+                    stderr: e.to_string(),
+                })?;
+            let stdout = String::from_utf8(output.stdout)
+                .unwrap_or_else(|e| String::from_utf8_lossy(&e.into_bytes()).to_string());
+            println!("{}", stdout);
         }
         DebugCommands::Tcpdump { interface, filter, output } => {
             println!("Starting packet capture on {}...", interface);
-            let mut args = vec!["-i", &interface];
+            let mut args = vec!["-i", interface.as_str()];
             if let Some(ref f) = filter {
-                args.push(f);
+                args.push(f.as_str());
             }
             if let Some(ref o) = output {
-                args.extend_from_slice(&["-w", o]);
+                args.extend_from_slice(&["-w", o.as_str()]);
             }
 
-            let status = std::process::Command::new("tcpdump")
+            let cmd_str = format!("tcpdump {}", args.join(" "));
+            let status = tokio::process::Command::new("tcpdump")
                 .args(&args)
-                .status()?;
+                .status()
+                .await
+                .map_err(|e| NetctlError::CommandFailed {
+                    cmd: cmd_str.clone(),
+                    code: None,
+                    stderr: e.to_string(),
+                })?;
 
             if !status.success() {
                 return Err(NetctlError::CommandFailed {
-                    cmd: format!("tcpdump {}", args.join(" ")),
+                    cmd: cmd_str,
                     code: status.code(),
                     stderr: "tcpdump failed".to_string(),
                 });
