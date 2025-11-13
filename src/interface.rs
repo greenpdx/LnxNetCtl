@@ -192,21 +192,24 @@ impl InterfaceController {
     // === Helper functions ===
 
     async fn run_ip(&self, args: &[&str]) -> NetctlResult<()> {
+        let cmd_str = format!("ip {}", args.join(" "));
         let output = Command::new("ip")
             .args(args)
             .output()
             .await
             .map_err(|e| NetctlError::CommandFailed {
-                cmd: format!("ip {}", args.join(" ")),
+                cmd: cmd_str.clone(),
                 code: None,
                 stderr: e.to_string(),
             })?;
 
         if !output.status.success() {
+            let stderr = String::from_utf8(output.stderr)
+                .unwrap_or_else(|e| String::from_utf8_lossy(&e.into_bytes()).to_string());
             return Err(NetctlError::CommandFailed {
-                cmd: format!("ip {}", args.join(" ")),
+                cmd: cmd_str,
                 code: output.status.code(),
-                stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+                stderr,
             });
         }
 
@@ -240,12 +243,13 @@ impl InterfaceController {
     }
 
     async fn get_addresses(&self, interface: &str) -> NetctlResult<Vec<IpAddress>> {
+        let cmd_str = format!("ip -json addr show {}", interface);
         let output = Command::new("ip")
             .args(["-json", "addr", "show", interface])
             .output()
             .await
             .map_err(|e| NetctlError::CommandFailed {
-                cmd: format!("ip -json addr show {}", interface),
+                cmd: cmd_str,
                 code: None,
                 stderr: e.to_string(),
             })?;
@@ -254,7 +258,8 @@ impl InterfaceController {
             return Ok(Vec::new());
         }
 
-        let json_str = String::from_utf8_lossy(&output.stdout);
+        let json_str = String::from_utf8(output.stdout)
+            .map_err(|e| NetctlError::ParseError(format!("Invalid UTF-8 in JSON output: {}", e)))?;
         let json: serde_json::Value = serde_json::from_str(&json_str)
             .map_err(|e| NetctlError::ParseError(e.to_string()))?;
 
@@ -273,7 +278,7 @@ impl InterfaceController {
                                 address: local.to_string(),
                                 family: family.to_string(),
                                 prefix_len: prefixlen as u8,
-                                scope: addr.get("scope").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                                scope: addr.get("scope").and_then(|v| v.as_str()).map(String::from),
                             });
                         }
                     }
@@ -285,12 +290,13 @@ impl InterfaceController {
     }
 
     async fn get_flags(&self, interface: &str) -> NetctlResult<Vec<String>> {
+        let cmd_str = format!("ip -json link show {}", interface);
         let output = Command::new("ip")
             .args(["-json", "link", "show", interface])
             .output()
             .await
             .map_err(|e| NetctlError::CommandFailed {
-                cmd: format!("ip -json link show {}", interface),
+                cmd: cmd_str,
                 code: None,
                 stderr: e.to_string(),
             })?;
@@ -299,7 +305,8 @@ impl InterfaceController {
             return Ok(Vec::new());
         }
 
-        let json_str = String::from_utf8_lossy(&output.stdout);
+        let json_str = String::from_utf8(output.stdout)
+            .map_err(|e| NetctlError::ParseError(format!("Invalid UTF-8 in JSON output: {}", e)))?;
         let json: serde_json::Value = serde_json::from_str(&json_str)
             .map_err(|e| NetctlError::ParseError(e.to_string()))?;
 
@@ -308,6 +315,7 @@ impl InterfaceController {
         if let Some(arr) = json.as_array() {
             if let Some(iface) = arr.first() {
                 if let Some(flag_arr) = iface.get("flags").and_then(|v| v.as_array()) {
+                    flags.reserve(flag_arr.len());
                     for flag in flag_arr {
                         if let Some(f) = flag.as_str() {
                             flags.push(f.to_string());

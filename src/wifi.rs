@@ -160,11 +160,8 @@ impl WifiController {
 
     /// Scan for WiFi networks
     pub async fn scan(&self, interface: &str) -> NetctlResult<Vec<ScanResult>> {
-        // Trigger scan
-        let _ = self.run_iw(&["dev", interface, "scan"]).await;
-
-        // Get results
-        let output = self.run_iw(&["dev", interface, "scan", "dump"]).await?;
+        // Get scan results (will trigger scan if needed)
+        let output = self.run_iw(&["dev", interface, "scan"]).await?;
 
         let mut results = Vec::new();
         let mut current: Option<ScanResult> = None;
@@ -176,24 +173,26 @@ impl WifiController {
                 if let Some(result) = current.take() {
                     results.push(result);
                 }
+                let bssid = line.strip_prefix("BSS ")
+                    .and_then(|s| s.split('(').next())
+                    .map(|s| s.trim().to_string())
+                    .unwrap_or_default();
                 current = Some(ScanResult {
-                    bssid: line.strip_prefix("BSS ").unwrap_or("").split('(').next().unwrap_or("").trim().to_string(),
+                    bssid,
                     ssid: None,
                     frequency: None,
                     signal: None,
                     capabilities: Vec::new(),
                 });
             } else if let Some(ref mut result) = current {
-                if line.starts_with("SSID: ") {
-                    result.ssid = Some(line.strip_prefix("SSID: ").unwrap_or("").to_string());
-                } else if line.starts_with("freq: ") {
-                    result.frequency = line.strip_prefix("freq: ").and_then(|s| s.parse().ok());
-                } else if line.starts_with("signal: ") {
-                    result.signal = Some(line.strip_prefix("signal: ").unwrap_or("").to_string());
-                } else if line.contains("capability:") {
-                    if let Some(caps) = line.strip_prefix("capability: ") {
-                        result.capabilities = caps.split_whitespace().map(|s| s.to_string()).collect();
-                    }
+                if let Some(ssid) = line.strip_prefix("SSID: ") {
+                    result.ssid = Some(ssid.to_string());
+                } else if let Some(freq_str) = line.strip_prefix("freq: ") {
+                    result.frequency = freq_str.parse().ok();
+                } else if let Some(sig) = line.strip_prefix("signal: ") {
+                    result.signal = Some(sig.to_string());
+                } else if let Some(caps) = line.strip_prefix("capability: ") {
+                    result.capabilities = caps.split_whitespace().map(String::from).collect();
                 }
             }
         }
@@ -208,47 +207,33 @@ impl WifiController {
     // === Helper functions ===
 
     async fn run_iw(&self, args: &[&str]) -> NetctlResult<String> {
+        let cmd_str = format!("iw {}", args.join(" "));
         let output = Command::new("iw")
             .args(args)
             .output()
             .await
             .map_err(|e| NetctlError::CommandFailed {
-                cmd: format!("iw {}", args.join(" ")),
+                cmd: cmd_str.clone(),
                 code: None,
                 stderr: e.to_string(),
             })?;
 
         if !output.status.success() {
+            let stderr = String::from_utf8(output.stderr)
+                .unwrap_or_else(|e| String::from_utf8_lossy(&e.into_bytes()).to_string());
             return Err(NetctlError::CommandFailed {
-                cmd: format!("iw {}", args.join(" ")),
+                cmd: cmd_str,
                 code: output.status.code(),
-                stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+                stderr,
             });
         }
 
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        String::from_utf8(output.stdout)
+            .map_err(|e| NetctlError::ParseError(format!("Invalid UTF-8 in command output: {}", e)))
     }
 
     async fn run_iw_no_output(&self, args: &[&str]) -> NetctlResult<()> {
-        let output = Command::new("iw")
-            .args(args)
-            .output()
-            .await
-            .map_err(|e| NetctlError::CommandFailed {
-                cmd: format!("iw {}", args.join(" ")),
-                code: None,
-                stderr: e.to_string(),
-            })?;
-
-        if !output.status.success() {
-            return Err(NetctlError::CommandFailed {
-                cmd: format!("iw {}", args.join(" ")),
-                code: output.status.code(),
-                stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-            });
-        }
-
-        Ok(())
+        self.run_iw(args).await.map(|_| ())
     }
 }
 

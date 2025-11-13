@@ -60,8 +60,9 @@ impl PluginManager {
     pub async fn register_plugin(&self, mut plugin: Box<dyn NetworkPlugin>) -> NetctlResult<()> {
         let metadata = plugin.metadata().clone();
         let plugin_id = metadata.id.clone();
+        let plugin_name = metadata.name.clone();
 
-        info!("Registering plugin: {} ({})", metadata.name, plugin_id);
+        info!("Registering plugin: {} ({})", plugin_name, plugin_id);
 
         // Initialize the plugin
         plugin.initialize().await?;
@@ -70,13 +71,17 @@ impl PluginManager {
         let mut plugins = self.plugins.write().await;
         let mut cache = self.metadata_cache.write().await;
 
+        #[cfg(feature = "dbus-nm")]
+        let dbus_service = metadata.dbus_service.clone();
+
         plugins.insert(plugin_id.clone(), plugin);
-        cache.insert(plugin_id.clone(), metadata.clone());
+        cache.insert(plugin_id.clone(), metadata);
 
         #[cfg(feature = "dbus-nm")]
-        if let Some(ref dbus_service) = metadata.dbus_service {
+        if let Some(ref service) = dbus_service {
             if let Some(ref conn) = self.dbus_conn {
-                self.expose_plugin_on_dbus(conn.clone(), &plugin_id, dbus_service, &metadata).await?;
+                let meta = cache.get(&plugin_id).unwrap();
+                self.expose_plugin_on_dbus(conn.clone(), &plugin_id, service, meta).await?;
             }
         }
 
