@@ -182,10 +182,34 @@ method = "auto"
 
 ## Security
 
-- All input is validated to prevent command injection
-- Configuration files are properly sanitized
-- MAC addresses, hostnames, and interface names are validated
-- Network operations require appropriate permissions
+nccli implements several security measures to protect your system:
+
+### Input Validation
+
+- **Connection Names**: Validated to prevent path traversal attacks. Only alphanumeric characters, hyphens, underscores, and dots are allowed (max 64 characters).
+- **WiFi SSIDs**: Validated according to IEEE 802.11 standards (1-32 bytes, no control characters).
+- **WiFi Passwords**: Validated for WPA2/WPA3 compliance (8-63 ASCII characters).
+- **Hostnames**: Validated using system hostname validation rules.
+
+### File Security
+
+- **Configuration File Permissions**: All connection configuration files are created with 0600 permissions (read/write for owner only).
+- **Password Storage**: WiFi passwords are stored in plain text in configuration files (standard limitation of network configuration systems). Ensure proper file system permissions and consider using file system encryption for sensitive deployments.
+
+### Access Control
+
+- Network operations require appropriate system permissions (typically root/sudo).
+- All commands validate input before executing system operations.
+- Path traversal attacks are prevented through strict validation of file paths.
+
+### Security Considerations
+
+- Store configuration files on encrypted file systems if they contain sensitive network credentials.
+- Regularly review and rotate WiFi passwords.
+- Limit access to the `/etc/crrouter/netctl/` directory to root only.
+- Use sudo with care and restrict which users can execute nccli.
+
+For detailed security information, see `SECURITY_AUDIT.md` in the project repository.
 
 ## See Also
 

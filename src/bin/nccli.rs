@@ -9,6 +9,11 @@ use netctl::validation;
 use netctl::connection_config::NetctlConnectionConfig;
 use std::path::PathBuf;
 use std::process;
+use std::fs::OpenOptions;
+use std::io::Write;
+
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
 
 #[derive(Parser)]
 #[command(name = "nccli")]
@@ -584,6 +589,81 @@ async fn handle_general(cmd: &GeneralCommands, cli: &Cli) -> NetctlResult<()> {
 }
 
 // ============================================================================
+// SECURITY VALIDATION FUNCTIONS
+// ============================================================================
+
+/// Validate connection name to prevent path traversal attacks
+fn validate_connection_name(name: &str) -> NetctlResult<()> {
+    if name.is_empty() {
+        return Err(NetctlError::InvalidParameter("Connection name cannot be empty".to_string()));
+    }
+    if name.len() > 64 {
+        return Err(NetctlError::InvalidParameter("Connection name too long (max 64 chars)".to_string()));
+    }
+    if name.contains('/') || name.contains('\\') || name.contains("..") {
+        return Err(NetctlError::InvalidParameter("Connection name contains invalid path characters".to_string()));
+    }
+    if !name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.') {
+        return Err(NetctlError::InvalidParameter("Connection name can only contain alphanumeric, dash, underscore, or dot".to_string()));
+    }
+    Ok(())
+}
+
+/// Validate WiFi SSID according to IEEE 802.11 standards
+fn validate_ssid(ssid: &str) -> NetctlResult<()> {
+    if ssid.is_empty() {
+        return Err(NetctlError::InvalidParameter("SSID cannot be empty".to_string()));
+    }
+    if ssid.len() > 32 {
+        return Err(NetctlError::InvalidParameter("SSID too long (max 32 bytes)".to_string()));
+    }
+    // Check for control characters that might cause issues
+    if ssid.chars().any(|c| c.is_control()) {
+        return Err(NetctlError::InvalidParameter("SSID contains invalid control characters".to_string()));
+    }
+    Ok(())
+}
+
+/// Validate WiFi password according to WPA2/WPA3 requirements
+fn validate_wifi_password(password: &str) -> NetctlResult<()> {
+    if password.len() < 8 {
+        return Err(NetctlError::InvalidParameter("WiFi password must be at least 8 characters".to_string()));
+    }
+    if password.len() > 63 {
+        return Err(NetctlError::InvalidParameter("WiFi password too long (max 63 characters)".to_string()));
+    }
+    if !password.is_ascii() {
+        return Err(NetctlError::InvalidParameter("WiFi password must contain only ASCII characters".to_string()));
+    }
+    Ok(())
+}
+
+/// Write configuration file with secure permissions (0600)
+fn write_secure_config(path: &PathBuf, content: &str) -> NetctlResult<()> {
+    #[cfg(unix)]
+    {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)  // rw------- (owner read/write only)
+            .open(path)
+            .map_err(|e| NetctlError::Io(e))?;
+
+        file.write_all(content.as_bytes())
+            .map_err(|e| NetctlError::Io(e))?;
+    }
+
+    #[cfg(not(unix))]
+    {
+        std::fs::write(path, content)
+            .map_err(|e| NetctlError::Io(e))?;
+    }
+
+    Ok(())
+}
+
+// ============================================================================
 // NETWORKING COMMAND HANDLERS
 // ============================================================================
 async fn handle_networking(cmd: &NetworkingCommands, cli: &Cli) -> NetctlResult<()> {
@@ -709,6 +789,9 @@ async fn handle_connection(cmd: &ConnectionCommands, cli: &Cli) -> NetctlResult<
             }
 
             if let Some(conn_id) = id {
+                // Validate connection name to prevent path traversal
+                validate_connection_name(conn_id)?;
+
                 // Show specific connection
                 let config_path = config_dir.join(format!("{}.nctl", conn_id));
                 if config_path.exists() {
@@ -746,6 +829,9 @@ async fn handle_connection(cmd: &ConnectionCommands, cli: &Cli) -> NetctlResult<
             }
         }
         ConnectionCommands::Up { id, ifname, ap: _, passwd_file: _ } => {
+            // Validate connection name to prevent path traversal
+            validate_connection_name(id)?;
+
             let config_path = config_dir.join(format!("{}.nctl", id));
             if !config_path.exists() {
                 return Err(NetctlError::NotFound(format!("Connection '{}' not found", id)));
@@ -767,6 +853,9 @@ async fn handle_connection(cmd: &ConnectionCommands, cli: &Cli) -> NetctlResult<
             }
         }
         ConnectionCommands::Down { id } => {
+            // Validate connection name to prevent path traversal
+            validate_connection_name(id)?;
+
             if !cli.terse {
                 println!("Connection '{}' successfully deactivated", id);
             }
@@ -775,6 +864,9 @@ async fn handle_connection(cmd: &ConnectionCommands, cli: &Cli) -> NetctlResult<
             let name = con_name.as_ref()
                 .or(ifname.as_ref())
                 .ok_or(NetctlError::InvalidParameter("Connection name or interface required".to_string()))?;
+
+            // Validate connection name to prevent path traversal
+            validate_connection_name(name)?;
 
             let config_path = config_dir.join(format!("{}.nctl", name));
 
@@ -802,11 +894,15 @@ async fn handle_connection(cmd: &ConnectionCommands, cli: &Cli) -> NetctlResult<
             if r#type == "wifi" {
                 config.push_str("[wifi]\n");
                 if let Some(s) = ssid {
+                    // Validate SSID
+                    validate_ssid(s)?;
                     config.push_str(&format!("ssid = \"{}\"\n", s));
                 }
                 config.push_str("mode = \"infrastructure\"\n\n");
 
                 if let Some(pwd) = password {
+                    // Validate WiFi password
+                    validate_wifi_password(pwd)?;
                     config.push_str("[wifi-security]\n");
                     config.push_str("key-mgmt = \"wpa-psk\"\n");
                     config.push_str(&format!("psk = \"{}\"\n\n", pwd));
@@ -828,9 +924,8 @@ async fn handle_connection(cmd: &ConnectionCommands, cli: &Cli) -> NetctlResult<
                 config.push_str("\n");
             }
 
-            // Write config file
-            std::fs::write(&config_path, config)
-                .map_err(|e| NetctlError::Io(e))?;
+            // Write config file with secure permissions (600)
+            write_secure_config(&config_path, &config)?;
 
             if !cli.terse {
                 println!("Connection '{}' ({}) successfully added.",
@@ -839,6 +934,9 @@ async fn handle_connection(cmd: &ConnectionCommands, cli: &Cli) -> NetctlResult<
             }
         }
         ConnectionCommands::Modify { id, settings: _ } => {
+            // Validate connection name to prevent path traversal
+            validate_connection_name(id)?;
+
             let config_path = config_dir.join(format!("{}.nctl", id));
             if !config_path.exists() {
                 return Err(NetctlError::NotFound(format!("Connection '{}' not found", id)));
@@ -852,6 +950,9 @@ async fn handle_connection(cmd: &ConnectionCommands, cli: &Cli) -> NetctlResult<
         }
         ConnectionCommands::Edit { id, r#type } => {
             if let Some(conn_id) = id {
+                // Validate connection name to prevent path traversal
+                validate_connection_name(conn_id)?;
+
                 let config_path = config_dir.join(format!("{}.nctl", conn_id));
                 if !config_path.exists() {
                     return Err(NetctlError::NotFound(format!("Connection '{}' not found", conn_id)));
@@ -865,6 +966,9 @@ async fn handle_connection(cmd: &ConnectionCommands, cli: &Cli) -> NetctlResult<
             }
         }
         ConnectionCommands::Delete { id } => {
+            // Validate connection name to prevent path traversal
+            validate_connection_name(id)?;
+
             let config_path = config_dir.join(format!("{}.nctl", id));
             if config_path.exists() {
                 std::fs::remove_file(&config_path)
@@ -897,6 +1001,9 @@ async fn handle_connection(cmd: &ConnectionCommands, cli: &Cli) -> NetctlResult<
             println!("Import not yet implemented for type: {}", r#type);
         }
         ConnectionCommands::Export { id, file } => {
+            // Validate connection name to prevent path traversal
+            validate_connection_name(id)?;
+
             let config_path = config_dir.join(format!("{}.nctl", id));
             if !config_path.exists() {
                 return Err(NetctlError::NotFound(format!("Connection '{}' not found", id)));
@@ -910,14 +1017,21 @@ async fn handle_connection(cmd: &ConnectionCommands, cli: &Cli) -> NetctlResult<
             }
         }
         ConnectionCommands::Clone { id, new_name } => {
+            // Validate connection names to prevent path traversal
+            validate_connection_name(id)?;
+            validate_connection_name(new_name)?;
+
             let config_path = config_dir.join(format!("{}.nctl", id));
             if !config_path.exists() {
                 return Err(NetctlError::NotFound(format!("Connection '{}' not found", id)));
             }
 
             let new_path = config_dir.join(format!("{}.nctl", new_name));
-            std::fs::copy(&config_path, &new_path)
+
+            // Read old config and write with secure permissions
+            let content = std::fs::read_to_string(&config_path)
                 .map_err(|e| NetctlError::Io(e))?;
+            write_secure_config(&new_path, &content)?;
 
             if !cli.terse {
                 println!("Connection '{}' cloned as '{}'", id, new_name);
@@ -1229,6 +1343,14 @@ async fn handle_device_wifi(cmd: &WifiDeviceCommands, cli: &Cli) -> NetctlResult
             let hotspot_ssid = ssid.as_ref()
                 .map(|s| s.clone())
                 .unwrap_or_else(|| format!("Hotspot-{}", interface));
+
+            // Validate SSID
+            validate_ssid(&hotspot_ssid)?;
+
+            // Validate password if provided
+            if let Some(ref pwd) = password {
+                validate_wifi_password(pwd)?;
+            }
 
             let config_dir = PathBuf::from("/run/crrouter/netctl");
             let hostapd_ctrl = hostapd::HostapdController::new(config_dir);
