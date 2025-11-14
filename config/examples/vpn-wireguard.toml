@@ -1,0 +1,45 @@
+# WireGuard VPN Configuration Example
+# Use with: netctl vpn create vpn-wireguard.toml
+
+[connection]
+uuid = "11111111-2222-3333-4444-555555555555"
+name = "WireGuard Home"
+conn_type = "vpn"
+autoconnect = false
+
+[connection.settings]
+# VPN backend type
+vpn_type = "wireguard"
+
+# Interface configuration
+private_key = "YOUR_PRIVATE_KEY_HERE"
+address = "10.0.0.2/24"
+listen_port = 51820
+dns = "1.1.1.1, 1.0.0.1"
+
+# Optional: MTU setting
+# mtu = 1420
+
+# Optional: Routing table
+# table = "auto"
+
+# Peer configuration
+[connection.settings.peer]
+public_key = "SERVER_PUBLIC_KEY_HERE"
+allowed_ips = "0.0.0.0/0, ::/0"
+endpoint = "vpn.example.com:51820"
+persistent_keepalive = 25
+
+# Optional: Pre-shared key for additional security
+# preshared_key = "YOUR_PRESHARED_KEY_HERE"
+
+# For multiple peers, use the following format instead:
+# [[connection.settings.peers]]
+# public_key = "PEER1_PUBLIC_KEY"
+# allowed_ips = "10.0.1.0/24"
+# endpoint = "peer1.example.com:51820"
+#
+# [[connection.settings.peers]]
+# public_key = "PEER2_PUBLIC_KEY"
+# allowed_ips = "10.0.2.0/24"
+# endpoint = "peer2.example.com:51820"

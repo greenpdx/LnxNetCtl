@@ -1,0 +1,43 @@
+# OpenVPN Configuration Example
+# Use with: netctl vpn create vpn-openvpn.toml
+
+[connection]
+uuid = "22222222-3333-4444-5555-666666666666"
+name = "OpenVPN Work"
+conn_type = "vpn"
+autoconnect = false
+
+[connection.settings]
+# VPN backend type
+vpn_type = "openvpn"
+
+# Option 1: Use an existing OpenVPN config file
+# config_file = "/etc/openvpn/client.ovpn"
+
+# Option 2: Specify connection parameters directly
+remote = "vpn.example.com"
+port = 1194
+proto = "udp"
+dev_type = "tun"
+
+# Certificate-based authentication
+ca = "/etc/openvpn/ca.crt"
+cert = "/etc/openvpn/client.crt"
+key = "/etc/openvpn/client.key"
+
+# Optional: TLS authentication
+# tls_auth = "/etc/openvpn/ta.key"
+# key_direction = 1
+
+# Optional: Cipher and authentication settings
+# cipher = "AES-256-GCM"
+# auth = "SHA256"
+
+# Optional: Compression
+# comp_lzo = true
+
+# Optional: Username/password authentication file
+# auth_user_pass = "/etc/openvpn/auth.txt"
+
+# Optional: Enable verbose logging
+# verbose = true

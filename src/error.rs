@@ -31,6 +31,8 @@ pub enum NetctlError {
     Timeout(String),
     /// Not found
     NotFound(String),
+    /// Invalid state
+    InvalidState(String),
 }
 
 impl fmt::Display for NetctlError {
@@ -55,6 +57,7 @@ impl fmt::Display for NetctlError {
             NetctlError::AlreadyExists(msg) => write!(f, "Already exists: {}", msg),
             NetctlError::Timeout(msg) => write!(f, "Timeout: {}", msg),
             NetctlError::NotFound(msg) => write!(f, "Not found: {}", msg),
+            NetctlError::InvalidState(msg) => write!(f, "Invalid state: {}", msg),
         }
     }
 }
@@ -64,6 +67,12 @@ impl std::error::Error for NetctlError {}
 impl From<io::Error> for NetctlError {
     fn from(error: io::Error) -> Self {
         NetctlError::Io(error)
+    }
+}
+
+impl From<serde_json::Error> for NetctlError {
+    fn from(error: serde_json::Error) -> Self {
+        NetctlError::ParseError(error.to_string())
     }
 }
 

@@ -56,6 +56,10 @@ enum Commands {
     #[command(subcommand)]
     Route(RouteCommands),
 
+    /// VPN management (WireGuard, OpenVPN, IPsec)
+    #[command(subcommand)]
+    Vpn(VpnCommands),
+
     /// Network monitoring
     #[command(subcommand)]
     Monitor(MonitorCommands),
@@ -212,6 +216,50 @@ enum RouteCommands {
 }
 
 #[derive(Subcommand)]
+enum VpnCommands {
+    /// List all VPN connections
+    List,
+    /// Show VPN connection details
+    Show { name: String },
+    /// Connect to a VPN
+    Connect { name: String },
+    /// Disconnect from a VPN
+    Disconnect { name: String },
+    /// Import VPN configuration file
+    Import {
+        /// VPN type: wireguard, openvpn, ipsec
+        #[arg(short, long)]
+        vpn_type: String,
+        /// Configuration file path
+        config_file: PathBuf,
+        /// Connection name
+        #[arg(short, long)]
+        name: String,
+    },
+    /// Export VPN configuration
+    Export {
+        /// Connection name
+        name: String,
+        /// Output file path
+        #[arg(short, long)]
+        output: PathBuf,
+    },
+    /// Create a new VPN connection from a config file
+    Create {
+        /// Configuration file in TOML format
+        config_file: PathBuf,
+    },
+    /// Delete a VPN connection
+    Delete { name: String },
+    /// Get VPN connection status
+    Status { name: String },
+    /// Get VPN connection statistics
+    Stats { name: String },
+    /// List available VPN backends
+    Backends,
+}
+
+#[derive(Subcommand)]
 enum MonitorCommands {
     /// Show bandwidth usage
     Bandwidth { interface: String },
@@ -249,6 +297,7 @@ async fn main() {
         Commands::Dhcp(ref cmd) => handle_dhcp(cmd, &cli).await,
         Commands::Dns(ref cmd) => handle_dns(cmd, &cli).await,
         Commands::Route(ref cmd) => handle_route(cmd, &cli).await,
+        Commands::Vpn(ref cmd) => handle_vpn(cmd, &cli).await,
         Commands::Monitor(ref cmd) => handle_monitor(cmd, &cli).await,
         Commands::Debug(ref cmd) => handle_debug(cmd, &cli).await,
     };
@@ -668,5 +717,282 @@ async fn handle_debug(cmd: &DebugCommands, _cli: &Cli) -> NetctlResult<()> {
             }
         }
     }
+    Ok(())
+}
+
+async fn handle_vpn(cmd: &VpnCommands, cli: &Cli) -> NetctlResult<()> {
+    use netctl::vpn::{VpnManager, wireguard, openvpn, ipsec};
+    use std::collections::HashMap;
+
+    // Initialize VPN manager with backends
+    let config_dir = std::env::var("NETCTL_CONFIG_DIR")
+        .unwrap_or_else(|_| "/etc/netctl".to_string());
+    let mut manager = VpnManager::new(PathBuf::from(config_dir));
+
+    // Register VPN backends
+    manager.register_backend("wireguard", wireguard::create_backend);
+    manager.register_backend("openvpn", openvpn::create_backend);
+    manager.register_backend("ipsec", ipsec::create_backend);
+
+    match cmd {
+        VpnCommands::List => {
+            let connections = manager.list_connections().await;
+            if cli.output == "json" {
+                println!("{}", serde_json::to_string_pretty(&connections)?);
+            } else {
+                if connections.is_empty() {
+                    println!("No VPN connections configured");
+                } else {
+                    println!("VPN Connections:");
+                    for uuid in &connections {
+                        if let Ok(config) = manager.get_config(uuid).await {
+                            let state = manager.get_state(uuid).await.unwrap_or(netctl::vpn::VpnState::Disconnected);
+                            println!("  {} - {} ({:?})", config.name, uuid, state);
+                        }
+                    }
+                }
+            }
+        }
+
+        VpnCommands::Show { name } => {
+            // Find connection by name
+            let connections = manager.list_connections().await;
+            let mut found = None;
+            for uuid in &connections {
+                if let Ok(config) = manager.get_config(uuid).await {
+                    if config.name == *name {
+                        found = Some(uuid.clone());
+                        break;
+                    }
+                }
+            }
+
+            if let Some(uuid) = found {
+                let config = manager.get_config(&uuid).await?;
+                let state = manager.get_state(&uuid).await?;
+                let status = manager.get_status(&uuid).await?;
+
+                if cli.output == "json" {
+                    let output = serde_json::json!({
+                        "config": config,
+                        "state": format!("{:?}", state),
+                        "status": status,
+                    });
+                    println!("{}", serde_json::to_string_pretty(&output)?);
+                } else {
+                    println!("VPN Connection: {}", config.name);
+                    println!("  UUID: {}", config.uuid);
+                    println!("  Type: {}", config.conn_type);
+                    println!("  State: {:?}", state);
+                    println!("  Auto-connect: {}", config.autoconnect);
+                    println!("\nConfiguration:");
+                    for (key, value) in &config.settings {
+                        if !key.contains("key") && !key.contains("password") && !key.contains("psk") {
+                            println!("    {}: {}", key, value);
+                        } else {
+                            println!("    {}: ********", key);
+                        }
+                    }
+                    println!("\nStatus:");
+                    println!("{}", serde_json::to_string_pretty(&status)?);
+                }
+            } else {
+                return Err(NetctlError::NotFound(format!("VPN connection '{}' not found", name)));
+            }
+        }
+
+        VpnCommands::Connect { name } => {
+            // Find connection by name
+            let connections = manager.list_connections().await;
+            let mut found = None;
+            for uuid in &connections {
+                if let Ok(config) = manager.get_config(uuid).await {
+                    if config.name == *name {
+                        found = Some(uuid.clone());
+                        break;
+                    }
+                }
+            }
+
+            if let Some(uuid) = found {
+                println!("Connecting to VPN: {}", name);
+                let interface = manager.connect(&uuid).await?;
+                println!("Connected! Interface: {}", interface);
+            } else {
+                return Err(NetctlError::NotFound(format!("VPN connection '{}' not found", name)));
+            }
+        }
+
+        VpnCommands::Disconnect { name } => {
+            // Find connection by name
+            let connections = manager.list_connections().await;
+            let mut found = None;
+            for uuid in &connections {
+                if let Ok(config) = manager.get_config(uuid).await {
+                    if config.name == *name {
+                        found = Some(uuid.clone());
+                        break;
+                    }
+                }
+            }
+
+            if let Some(uuid) = found {
+                println!("Disconnecting VPN: {}", name);
+                manager.disconnect(&uuid).await?;
+                println!("Disconnected!");
+            } else {
+                return Err(NetctlError::NotFound(format!("VPN connection '{}' not found", name)));
+            }
+        }
+
+        VpnCommands::Import { vpn_type, config_file, name } => {
+            println!("Importing {} configuration from {:?}", vpn_type, config_file);
+            let uuid = manager.import_config(vpn_type, config_file, name.clone()).await?;
+            println!("Imported successfully! Connection UUID: {}", uuid);
+        }
+
+        VpnCommands::Export { name, output } => {
+            // Find connection by name
+            let connections = manager.list_connections().await;
+            let mut found = None;
+            for uuid in &connections {
+                if let Ok(config) = manager.get_config(uuid).await {
+                    if config.name == *name {
+                        found = Some(uuid.clone());
+                        break;
+                    }
+                }
+            }
+
+            if let Some(uuid) = found {
+                println!("Exporting VPN configuration to {:?}", output);
+                manager.export_config(&uuid, output).await?;
+                println!("Exported successfully!");
+            } else {
+                return Err(NetctlError::NotFound(format!("VPN connection '{}' not found", name)));
+            }
+        }
+
+        VpnCommands::Create { config_file } => {
+            println!("Creating VPN connection from {:?}", config_file);
+            let content = tokio::fs::read_to_string(config_file).await
+                .map_err(|e| NetctlError::ServiceError(e.to_string()))?;
+            let config: ConnectionConfig = toml::from_str(&content)
+                .map_err(|e| NetctlError::InvalidParameter(format!("Invalid TOML: {}", e)))?;
+
+            let uuid = manager.create_connection(config.clone()).await?;
+            println!("Created VPN connection: {} ({})", config.name, uuid);
+        }
+
+        VpnCommands::Delete { name } => {
+            // Find connection by name
+            let connections = manager.list_connections().await;
+            let mut found = None;
+            for uuid in &connections {
+                if let Ok(config) = manager.get_config(uuid).await {
+                    if config.name == *name {
+                        found = Some(uuid.clone());
+                        break;
+                    }
+                }
+            }
+
+            if let Some(uuid) = found {
+                println!("Deleting VPN connection: {}", name);
+                manager.delete_connection(&uuid).await?;
+                println!("Deleted!");
+            } else {
+                return Err(NetctlError::NotFound(format!("VPN connection '{}' not found", name)));
+            }
+        }
+
+        VpnCommands::Status { name } => {
+            // Find connection by name
+            let connections = manager.list_connections().await;
+            let mut found = None;
+            for uuid in &connections {
+                if let Ok(config) = manager.get_config(uuid).await {
+                    if config.name == *name {
+                        found = Some(uuid.clone());
+                        break;
+                    }
+                }
+            }
+
+            if let Some(uuid) = found {
+                let state = manager.get_state(&uuid).await?;
+                let status = manager.get_status(&uuid).await?;
+
+                if cli.output == "json" {
+                    let output = serde_json::json!({
+                        "name": name,
+                        "uuid": uuid,
+                        "state": format!("{:?}", state),
+                        "status": status,
+                    });
+                    println!("{}", serde_json::to_string_pretty(&output)?);
+                } else {
+                    println!("VPN Connection: {}", name);
+                    println!("State: {:?}", state);
+                    println!("\nStatus:");
+                    println!("{}", serde_json::to_string_pretty(&status)?);
+                }
+            } else {
+                return Err(NetctlError::NotFound(format!("VPN connection '{}' not found", name)));
+            }
+        }
+
+        VpnCommands::Stats { name } => {
+            // Find connection by name
+            let connections = manager.list_connections().await;
+            let mut found = None;
+            for uuid in &connections {
+                if let Ok(config) = manager.get_config(uuid).await {
+                    if config.name == *name {
+                        found = Some(uuid.clone());
+                        break;
+                    }
+                }
+            }
+
+            if let Some(uuid) = found {
+                let stats = manager.get_stats(&uuid).await?;
+
+                if cli.output == "json" {
+                    println!("{}", serde_json::to_string_pretty(&stats)?);
+                } else {
+                    println!("VPN Statistics: {}", name);
+                    println!("  Bytes sent: {}", stats.bytes_sent);
+                    println!("  Bytes received: {}", stats.bytes_received);
+                    println!("  Packets sent: {}", stats.packets_sent);
+                    println!("  Packets received: {}", stats.packets_received);
+                    if let Some(connected_since) = stats.connected_since {
+                        println!("  Connected since: {:?}", connected_since);
+                    }
+                    if let Some(last_handshake) = stats.last_handshake {
+                        println!("  Last handshake: {:?}", last_handshake);
+                    }
+                    if let Some(peer_endpoint) = stats.peer_endpoint {
+                        println!("  Peer endpoint: {}", peer_endpoint);
+                    }
+                }
+            } else {
+                return Err(NetctlError::NotFound(format!("VPN connection '{}' not found", name)));
+            }
+        }
+
+        VpnCommands::Backends => {
+            let backends = manager.available_backends();
+            if cli.output == "json" {
+                println!("{}", serde_json::to_string_pretty(&backends)?);
+            } else {
+                println!("Available VPN Backends:");
+                for backend in &backends {
+                    println!("  - {}", backend);
+                }
+            }
+        }
+    }
+
     Ok(())
 }
