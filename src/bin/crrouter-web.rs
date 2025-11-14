@@ -73,6 +73,7 @@ impl IntoResponse for ApiError {
             NetctlError::ConfigError(msg) => (StatusCode::BAD_REQUEST, msg),
             NetctlError::ServiceError(msg) => (StatusCode::SERVICE_UNAVAILABLE, msg),
             NetctlError::NotSupported(msg) => (StatusCode::NOT_IMPLEMENTED, msg),
+            NetctlError::InvalidState(msg) => (StatusCode::CONFLICT, msg),
         };
 
         let body = Json(ErrorResponse {

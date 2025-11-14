@@ -8,6 +8,7 @@
 //! - DHCP testing and diagnostics (dhcpm)
 //! - DNS configuration
 //! - Routing
+//! - VPN management (WireGuard, OpenVPN, IPsec)
 //!
 //! Includes NetworkManager D-Bus compatibility layer.
 
@@ -21,6 +22,7 @@ pub mod dhcpm;
 pub mod routing;
 pub mod plugin;
 pub mod connection_config;
+pub mod vpn;
 
 #[cfg(feature = "dbus-nm")]
 pub mod dbus;
@@ -40,4 +42,7 @@ pub use plugin::{
     NetworkPlugin, PluginCapability, PluginMetadata, PluginState,
     ConnectionConfig, ConnectionStats, PluginManager, PluginLoader,
     PluginConfig, PluginConfigManager,
+};
+pub use vpn::{
+    VpnBackend, VpnBackendFactory, VpnManager, VpnState, VpnStats,
 };

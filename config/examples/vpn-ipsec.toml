@@ -1,0 +1,73 @@
+# IPsec/IKEv2 VPN Configuration Example (strongSwan/FreeSWAN/Libreswan compatible)
+# Use with: netctl vpn create vpn-ipsec.toml
+
+[connection]
+uuid = "33333333-4444-5555-6666-777777777777"
+name = "IPsec Corporate"
+conn_type = "vpn"
+autoconnect = false
+
+[connection.settings]
+# VPN backend type
+vpn_type = "ipsec"
+
+# Connection type: tunnel (default) or transport
+type = "tunnel"
+
+# Auto-start behavior: start, add, or ignore
+auto = "start"
+
+# Key exchange version: ikev2 (recommended), ikev1, or ike
+keyexchange = "ikev2"
+
+# Remote gateway (required)
+right = "vpn.example.com"
+rightid = "vpn.example.com"
+rightauth = "pubkey"
+rightsubnet = "0.0.0.0/0"
+
+# Local configuration
+leftid = "user@example.com"
+leftauth = "pubkey"
+leftcert = "client.pem"
+
+# Optional: Source IP for the connection
+# leftsourceip = "%config"
+
+# Authentication Method 1: Certificate-based (recommended)
+# The certificate should be in /etc/ipsec.d/certs/
+# The private key should be in /etc/ipsec.d/private/
+# leftcert = "client.pem"
+
+# Authentication Method 2: Pre-Shared Key (PSK)
+# psk = "YOUR_SHARED_SECRET_HERE"
+
+# Authentication Method 3: EAP (username/password)
+# eap_identity = "username@example.com"
+# eap_password = "your_password_here"
+
+# Authentication Method 4: XAUTH (legacy)
+# xauth_user = "username"
+# xauth_pass = "password"
+
+# IKE and ESP proposals (encryption/authentication algorithms)
+# ike = "aes256-sha2_256-modp2048!"
+# esp = "aes256-sha2_256!"
+
+# Dead Peer Detection (DPD)
+dpdaction = "restart"
+dpddelay = 30
+dpdtimeout = 150
+
+# Optional: Lifetime settings
+# ikelifetime = "3h"
+# lifetime = "1h"
+
+# Optional: Rekey settings
+# rekey = true
+
+# Optional: Close action (restart, clear, hold, or none)
+# closeaction = "restart"
+
+# Optional: Mark for routing
+# mark = "42"
