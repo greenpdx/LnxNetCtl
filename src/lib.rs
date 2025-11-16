@@ -10,7 +10,7 @@
 //! - Routing
 //! - VPN management (WireGuard, OpenVPN, IPsec)
 //!
-//! Includes NetworkManager D-Bus compatibility layer.
+//! Includes NetworkManager D-Bus compatibility layer and CR D-Bus interface.
 
 pub mod error;
 pub mod validation;
@@ -26,6 +26,7 @@ pub mod connection_config;
 pub mod vpn;
 pub mod network_monitor;
 pub mod libnm_compat;
+pub mod cr_dbus;
 
 #[cfg(feature = "dbus-nm")]
 pub mod dbus;
@@ -66,4 +67,12 @@ pub use libnm_compat::{
     CRSetting, CRSettingConnection, CRSettingWired, CRSettingWireless,
     CRSettingIP4Config, CRSettingIP6Config,
     CRState, CRConnectivityState, CRActiveConnectionState,
+};
+
+// CR D-Bus interface
+pub use cr_dbus::{
+    CRDbusService, CRNetworkControl, CRWiFi, CRVPN,
+    CRNetworkState, CRConnectivity, CRDeviceInfo,
+    CRAccessPointInfo, CRVpnInfo, CRWiFiSecurity, CRWiFiMode, CRVpnType, CRVpnState,
+    CR_DBUS_SERVICE, CR_DBUS_PATH, CR_WIFI_PATH,
 };
