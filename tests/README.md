@@ -1,6 +1,6 @@
-# Testing Guide for nccli
+# Testing Guide
 
-This directory contains comprehensive tests for the nccli network control CLI tool.
+This directory contains comprehensive tests for the LnxNetCtl project, including the nccli CLI tool and the crrouter-web REST API.
 
 ## Test Types
 
@@ -55,6 +55,38 @@ sudo ./tests/hardware_test_suite.sh
 - WiFi adapter (for WiFi tests)
 - Multiple machines (for full suite)
 
+### 3. API Curl Tests
+
+Comprehensive REST API tests for the crrouter-web service using curl.
+
+**File:** `api_curl_tests.sh`
+
+**Run tests:**
+```bash
+# Start the API server first
+cargo run --bin crrouter-web &
+
+# Run the tests
+./tests/api_curl_tests.sh
+
+# Or specify a custom server URL
+./tests/api_curl_tests.sh http://localhost:3000
+```
+
+**What it tests:**
+- Health and info endpoints
+- Device management (list, get, configure, delete, stats)
+- DHCP testing (discover, request, release, test sequence)
+- Interface management (legacy API)
+- WiFi operations (scanning)
+- Error handling and edge cases
+
+**Requirements:**
+- Running crrouter-web server
+- curl command-line tool
+- Network interfaces for testing
+- Some tests may require elevated privileges
+
 ## Quick Start
 
 ### Running All Tests
@@ -65,6 +97,12 @@ cargo test
 
 # Run hardware tests (requires root)
 sudo ./tests/hardware_test_suite.sh
+
+# Run API curl tests (requires running API server)
+cargo run --bin crrouter-web &
+sleep 2  # Wait for server to start
+./tests/api_curl_tests.sh
+pkill crrouter-web  # Stop server after tests
 
 # Run with verbose output
 VERBOSE=1 sudo ./tests/hardware_test_suite.sh
@@ -148,6 +186,18 @@ sudo ./tests/hardware_test_suite.sh
 | Error Handling | 3 | Invalid inputs, error messages |
 | Stress Tests | 2 | Rapid operations, multiple iterations |
 | **Total** | **37** | |
+
+### API Curl Tests Coverage
+
+| Category | Endpoints | Description |
+|----------|-----------|-------------|
+| Health & Info | 2 | Health check, API documentation |
+| Device Management | 7 | List, get, configure, delete devices and stats |
+| DHCP Testing | 5 | Discover, request, release, test, sequence |
+| Interface Management | 2 | List interfaces, get interface info |
+| WiFi Operations | 1 | WiFi network scanning |
+| Error Handling | 4 | Invalid endpoints, malformed requests |
+| **Total** | **21** | |
 
 ## Continuous Integration
 
