@@ -220,6 +220,19 @@ impl InterfaceController {
         Ok(())
     }
 
+    /// Delete a virtual interface (bridge, vlan, veth, etc.)
+    pub async fn delete(&self, interface: &str) -> NetctlResult<()> {
+        validation::validate_interface_name(interface)?;
+
+        // Verify interface exists
+        let sys_path = format!("/sys/class/net/{}", interface);
+        if !Path::new(&sys_path).exists() {
+            return Err(NetctlError::InterfaceNotFound(interface.to_string()));
+        }
+
+        self.run_ip(&["link", "delete", "dev", interface]).await
+    }
+
     // === Helper functions ===
 
     async fn run_ip(&self, args: &[&str]) -> NetctlResult<()> {

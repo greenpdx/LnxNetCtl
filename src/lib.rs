@@ -20,6 +20,7 @@ pub mod hostapd;
 pub mod dhcp;
 pub mod dhcpm;
 pub mod routing;
+pub mod device;
 pub mod plugin;
 pub mod connection_config;
 pub mod vpn;
@@ -42,6 +43,10 @@ pub use dhcpm::{
     DhcpMessageType, DhcpOption,
 };
 pub use routing::RoutingController;
+pub use device::{
+    DeviceController, Device, DeviceType, DeviceState, DeviceCapabilities,
+    DeviceStats, DeviceConfig,
+};
 pub use plugin::{
     NetworkPlugin, PluginCapability, PluginMetadata, PluginState,
     ConnectionConfig, ConnectionStats, PluginManager, PluginLoader,

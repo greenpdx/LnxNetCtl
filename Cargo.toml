@@ -26,6 +26,10 @@ path = "src/bin/nm-converter.rs"
 name = "nccli"
 path = "src/bin/nccli.rs"
 
+[[bin]]
+name = "crrouter-web"
+path = "src/bin/crrouter-web.rs"
+
 [dependencies]
 # Async runtime
 tokio = { version = "1", features = ["full"] }
