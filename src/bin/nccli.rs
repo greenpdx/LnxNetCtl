@@ -87,6 +87,10 @@ enum Commands {
     #[command(subcommand)]
     Device(DeviceCommands),
 
+    /// Run nmcli as a NetworkManager secret agent or polkit agent
+    #[command(subcommand)]
+    Agent(AgentCommands),
+
     /// Monitor network activity
     Monitor,
 }
@@ -158,6 +162,21 @@ enum RadioCommands {
         /// on or off
         state: Option<String>,
     },
+}
+
+// ============================================================================
+// AGENT COMMANDS
+// ============================================================================
+#[derive(Subcommand)]
+enum AgentCommands {
+    /// Run as a secret agent
+    Secret,
+
+    /// Register as a polkit agent
+    Polkit,
+
+    /// Register as both secret and polkit agent
+    All,
 }
 
 // ============================================================================
@@ -493,6 +512,7 @@ async fn main() {
         Commands::Radio(cmd) => handle_radio(cmd, &cli).await,
         Commands::Connection(cmd) => handle_connection(cmd, &cli).await,
         Commands::Device(cmd) => handle_device(cmd, &cli).await,
+        Commands::Agent(cmd) => handle_agent(cmd, &cli).await,
         Commands::Monitor => handle_monitor(&cli).await,
     };
 
@@ -759,6 +779,33 @@ async fn handle_radio(cmd: &RadioCommands, cli: &Cli) -> NetctlResult<()> {
                 println!("enabled");
             } else {
                 println!("WWAN radio not available");
+            }
+        }
+    }
+    Ok(())
+}
+
+// ============================================================================
+// AGENT COMMAND HANDLERS
+// ============================================================================
+async fn handle_agent(cmd: &AgentCommands, cli: &Cli) -> NetctlResult<()> {
+    match cmd {
+        AgentCommands::Secret => {
+            if !cli.terse {
+                println!("NetworkManager is not running (secret agent mode)");
+                println!("Note: nccli secret agent is not needed for netctl operation");
+            }
+        }
+        AgentCommands::Polkit => {
+            if !cli.terse {
+                println!("NetworkManager is not running (polkit agent mode)");
+                println!("Note: nccli polkit agent is not needed for netctl operation");
+            }
+        }
+        AgentCommands::All => {
+            if !cli.terse {
+                println!("NetworkManager is not running (all agents mode)");
+                println!("Note: nccli agents are not needed for netctl operation");
             }
         }
     }
