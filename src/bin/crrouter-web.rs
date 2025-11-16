@@ -1,21 +1,28 @@
 //! crrouter-web - Web API for CRRouter network management
 //!
 //! Provides REST API endpoints for network management operations including:
+//! - Device discovery and management
 //! - DHCP testing and diagnostics
 //! - Interface management
 //! - WiFi operations
 //! - Access Point control
+//!
+//! ## Architecture
+//!
+//! This web API serves as a clean interface layer over the netctl library.
+//! All business logic is in the core library modules, and this API provides
+//! RESTful HTTP endpoints for external integration.
 
 use axum::{
-    extract::{Json, Path, State},
+    extract::{Json, Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{delete, get, patch, post},
     Router,
 };
 use netctl::{
-    DhcpTestConfig, DhcpTestResult, DhcpmController, InterfaceController,
-    NetctlError, WifiController,
+    Device, DeviceConfig, DeviceController, DeviceType, DhcpTestConfig,
+    DhcpTestResult, DhcpmController, InterfaceController, NetctlError, WifiController,
 };
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
@@ -28,6 +35,7 @@ use tracing_subscriber;
 /// Application state shared across handlers
 #[derive(Clone)]
 struct AppState {
+    device: Arc<DeviceController>,
     dhcpm: Arc<DhcpmController>,
     interface: Arc<InterfaceController>,
     wifi: Arc<WifiController>,
@@ -94,23 +102,217 @@ async fn health_check() -> Json<serde_json::Value> {
     }))
 }
 
-/// API info endpoint
+/// API info endpoint with comprehensive documentation
 async fn api_info() -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "name": "CRRouter Web API",
         "version": env!("CARGO_PKG_VERSION"),
+        "description": "Network device management and control API",
         "endpoints": {
-            "health": "/health",
-            "api": "/api",
-            "dhcp_test": "/api/dhcp/test",
-            "dhcp_discover": "/api/dhcp/discover",
-            "dhcp_request": "/api/dhcp/request",
-            "dhcp_release": "/api/dhcp/release",
-            "dhcp_test_sequence": "/api/dhcp/test-sequence/:interface",
-            "interfaces": "/api/interfaces",
-            "wifi_scan": "/api/wifi/scan/:interface"
+            "health": {
+                "path": "/health",
+                "method": "GET",
+                "description": "Health check endpoint"
+            },
+            "api": {
+                "path": "/api",
+                "method": "GET",
+                "description": "API documentation and endpoint listing"
+            },
+            "devices": {
+                "list": {
+                    "path": "/api/devices",
+                    "method": "GET",
+                    "description": "List all network devices with full information",
+                    "query_params": {
+                        "type": "Filter by device type (wifi, ethernet, bridge, etc.)"
+                    }
+                },
+                "get": {
+                    "path": "/api/devices/:name",
+                    "method": "GET",
+                    "description": "Get detailed information about a specific device"
+                },
+                "configure": {
+                    "path": "/api/devices/:name",
+                    "method": "PATCH",
+                    "description": "Configure device settings (state, mtu, mac, ip addresses)"
+                },
+                "delete": {
+                    "path": "/api/devices/:name",
+                    "method": "DELETE",
+                    "description": "Delete a virtual device"
+                },
+                "stats": {
+                    "path": "/api/devices/:name/stats",
+                    "method": "GET",
+                    "description": "Get device statistics (rx/tx bytes, packets, errors)"
+                }
+            },
+            "dhcp": {
+                "test": {
+                    "path": "/api/dhcp/test",
+                    "method": "POST",
+                    "description": "Run DHCP test with specified message type"
+                },
+                "discover": {
+                    "path": "/api/dhcp/discover",
+                    "method": "POST",
+                    "description": "Send DHCP discover message"
+                },
+                "request": {
+                    "path": "/api/dhcp/request",
+                    "method": "POST",
+                    "description": "Send DHCP request message"
+                },
+                "release": {
+                    "path": "/api/dhcp/release",
+                    "method": "POST",
+                    "description": "Send DHCP release message"
+                },
+                "test_sequence": {
+                    "path": "/api/dhcp/test-sequence/:interface",
+                    "method": "GET",
+                    "description": "Run full DHCP test sequence on interface"
+                }
+            },
+            "interfaces": {
+                "list": {
+                    "path": "/api/interfaces",
+                    "method": "GET",
+                    "description": "List all network interfaces (names only)"
+                },
+                "get": {
+                    "path": "/api/interfaces/:interface",
+                    "method": "GET",
+                    "description": "Get interface information"
+                }
+            },
+            "wifi": {
+                "scan": {
+                    "path": "/api/wifi/scan/:interface",
+                    "method": "GET",
+                    "description": "Scan for WiFi networks"
+                }
+            }
         }
     }))
+}
+
+// ============================================================================
+// Device Management Endpoints
+// ============================================================================
+
+/// Query parameters for device listing
+#[derive(Debug, Deserialize)]
+struct DeviceQuery {
+    /// Filter by device type
+    #[serde(rename = "type")]
+    device_type: Option<String>,
+}
+
+/// List all devices with optional filtering
+async fn list_devices(
+    State(state): State<AppState>,
+    Query(query): Query<DeviceQuery>,
+) -> Result<Json<Vec<Device>>, ApiError> {
+    info!("Listing devices with filter: {:?}", query);
+
+    let devices = if let Some(type_str) = query.device_type {
+        // Parse device type
+        let device_type = match type_str.to_lowercase().as_str() {
+            "wifi" => DeviceType::Wifi,
+            "ethernet" => DeviceType::Ethernet,
+            "loopback" => DeviceType::Loopback,
+            "bridge" => DeviceType::Bridge,
+            "vlan" => DeviceType::Vlan,
+            "tuntap" => DeviceType::TunTap,
+            "veth" => DeviceType::Veth,
+            "bond" => DeviceType::Bond,
+            "vpn" => DeviceType::Vpn,
+            "container" => DeviceType::Container,
+            "ppp" => DeviceType::Ppp,
+            _ => {
+                return Err(ApiError(NetctlError::InvalidParameter(format!(
+                    "Unknown device type: {}",
+                    type_str
+                ))))
+            }
+        };
+
+        state.device.get_devices_by_type(device_type).await?
+    } else {
+        state.device.list_devices().await?
+    };
+
+    Ok(Json(devices))
+}
+
+/// Get information about a specific device
+async fn get_device(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+) -> Result<Json<Device>, ApiError> {
+    info!("Getting device info for: {}", name);
+
+    let device = state.device.get_device(&name).await?;
+    Ok(Json(device))
+}
+
+/// Configure a device
+async fn configure_device(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+    Json(config): Json<DeviceConfig>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    info!("Configuring device {}: {:?}", name, config);
+
+    state.device.configure_device(&name, &config).await?;
+
+    Ok(Json(serde_json::json!({
+        "status": "ok",
+        "device": name,
+        "message": "Device configured successfully"
+    })))
+}
+
+/// Delete a virtual device
+async fn delete_device(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    info!("Deleting device: {}", name);
+
+    state.device.delete_device(&name).await?;
+
+    Ok(Json(serde_json::json!({
+        "status": "ok",
+        "device": name,
+        "message": "Device deleted successfully"
+    })))
+}
+
+/// Get device statistics
+async fn get_device_stats(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    info!("Getting stats for device: {}", name);
+
+    let device = state.device.get_device(&name).await?;
+
+    if let Some(stats) = device.stats {
+        Ok(Json(serde_json::json!({
+            "device": name,
+            "stats": stats
+        })))
+    } else {
+        Ok(Json(serde_json::json!({
+            "device": name,
+            "stats": null,
+            "message": "Statistics not available for this device"
+        })))
+    }
 }
 
 // ============================================================================
@@ -197,7 +399,7 @@ async fn dhcp_test_sequence(
 }
 
 // ============================================================================
-// Interface Management Endpoints
+// Interface Management Endpoints (Legacy - redirects to device endpoints)
 // ============================================================================
 
 /// List all network interfaces
@@ -277,6 +479,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Starting CRRouter Web API v{}", env!("CARGO_PKG_VERSION"));
 
     // Initialize controllers
+    let device = Arc::new(DeviceController::new());
+
     let dhcpm = Arc::new(
         DhcpmController::new("eth0".to_string()).map_err(|e| {
             warn!("Failed to initialize DHCP testing controller: {}", e);
@@ -288,16 +492,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let wifi = Arc::new(WifiController::new());
 
     let state = AppState {
+        device,
         dhcpm,
         interface,
         wifi,
     };
 
-    // Build router
+    // Build router with all endpoints
     let app = Router::new()
         // Health and info
         .route("/health", get(health_check))
         .route("/api", get(api_info))
+        // Device management (primary API)
+        .route("/api/devices", get(list_devices))
+        .route("/api/devices/:name", get(get_device))
+        .route("/api/devices/:name", patch(configure_device))
+        .route("/api/devices/:name", delete(delete_device))
+        .route("/api/devices/:name/stats", get(get_device_stats))
         // DHCP testing
         .route("/api/dhcp/test", post(dhcp_test))
         .route("/api/dhcp/discover", post(dhcp_discover))
@@ -307,7 +518,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/dhcp/test-sequence/:interface",
             get(dhcp_test_sequence),
         )
-        // Interface management
+        // Interface management (legacy compatibility)
         .route("/api/interfaces", get(list_interfaces))
         .route("/api/interfaces/:interface", get(get_interface_info))
         // WiFi
@@ -327,6 +538,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Listening on http://{}", addr);
     info!("API documentation available at http://{}/api", addr);
+    info!("");
+    info!("Device Management API Endpoints:");
+    info!("  GET    /api/devices              - List all devices");
+    info!("  GET    /api/devices/:name        - Get device info");
+    info!("  PATCH  /api/devices/:name        - Configure device");
+    info!("  DELETE /api/devices/:name        - Delete virtual device");
+    info!("  GET    /api/devices/:name/stats  - Get device statistics");
+    info!("");
+    info!("DHCP Testing Endpoints:");
+    info!("  POST   /api/dhcp/test             - Run DHCP test");
+    info!("  POST   /api/dhcp/discover         - Send DHCP discover");
+    info!("  POST   /api/dhcp/request          - Send DHCP request");
+    info!("  POST   /api/dhcp/release          - Send DHCP release");
+    info!("  GET    /api/dhcp/test-sequence/:interface - Run test sequence");
 
     // Start server
     let listener = tokio::net::TcpListener::bind(addr).await?;
