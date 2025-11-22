@@ -1,6 +1,6 @@
-# libnccli - Network Control CLI
+# nccli - Network Control CLI
 
-`libnccli` is a comprehensive command-line interface for network management. It provides complete network device and connection management using the netctl backend.
+`nccli` is a comprehensive command-line interface for network management. It provides complete network device and connection management using the netctl backend.
 
 ## Features
 
@@ -13,7 +13,7 @@
 ## Command Structure
 
 ```bash
-libnccli [OPTIONS] <COMMAND>
+nccli [OPTIONS] <COMMAND>
 ```
 
 ### Available Commands
@@ -83,77 +83,77 @@ The `device wifi` subcommand provides comprehensive WiFi management:
 
 ### Show general status
 ```bash
-libnccli
+nccli
 # or explicitly
-libnccli general status
+nccli general status
 ```
 
 ### List all connections
 ```bash
-libnccli connection show
+nccli connection show
 ```
 
 ### Create a new WiFi connection
 ```bash
-libnccli connection add --type wifi --con-name MyWiFi --ifname wlan0 \
+nccli connection add --type wifi --con-name MyWiFi --ifname wlan0 \
   --ssid "MyNetwork" --password "MyPassword" --ip4 auto
 ```
 
 ### List all devices
 ```bash
-libnccli device status
+nccli device status
 ```
 
 ### Show device details
 ```bash
-libnccli device show eth0
+nccli device show eth0
 ```
 
 ### Scan for WiFi networks
 ```bash
-libnccli device wifi list
+nccli device wifi list
 ```
 
 ### Connect to a WiFi network
 ```bash
-libnccli device wifi connect "NetworkName" --password "password"
+nccli device wifi connect "NetworkName" --password "password"
 ```
 
 ### Create a WiFi hotspot
 ```bash
-libnccli device wifi hotspot --ssid "MyHotspot" --password "mypassword"
+nccli device wifi hotspot --ssid "MyHotspot" --password "mypassword"
 ```
 
 ### Enable/disable networking
 ```bash
-libnccli networking on
-libnccli networking off
+nccli networking on
+nccli networking off
 ```
 
 ### Control WiFi radio
 ```bash
-libnccli radio wifi on
-libnccli radio wifi off
+nccli radio wifi on
+nccli radio wifi off
 ```
 
 ### Activate a connection
 ```bash
-libnccli connection up MyConnection
+nccli connection up MyConnection
 ```
 
 ### Deactivate a connection
 ```bash
-libnccli connection down MyConnection
+nccli connection down MyConnection
 ```
 
 ### Monitor network changes
 ```bash
-libnccli monitor
+nccli monitor
 ```
 
 ### Terse output (machine-readable)
 ```bash
-libnccli -t device status
+nccli -t device status
 ```
 
 ## Connection Configuration Files
@@ -182,7 +182,7 @@ method = "auto"
 
 ## Security
 
-libnccli implements several security measures to protect your system:
+nccli implements several security measures to protect your system:
 
 ### Input Validation
 
@@ -207,7 +207,7 @@ libnccli implements several security measures to protect your system:
 - Store configuration files on encrypted file systems if they contain sensitive network credentials.
 - Regularly review and rotate WiFi passwords.
 - Limit access to the `/etc/crrouter/netctl/` directory to root only.
-- Use sudo with care and restrict which users can execute libnccli.
+- Use sudo with care and restrict which users can execute nccli.
 
 For detailed security information, see `SECURITY_AUDIT.md` in the project repository.
 

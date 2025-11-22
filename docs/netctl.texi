@@ -200,7 +200,7 @@ cargo build --release
 # Install binaries
 sudo cp target/release/netctl /usr/bin/
 sudo cp target/release/nm-converter /usr/bin/
-sudo cp target/release/libnccli /usr/bin/
+sudo cp target/release/nccli /usr/bin/
 
 # Install systemd service files
 sudo mkdir -p /lib/systemd/system
@@ -211,7 +211,7 @@ sudo systemctl daemon-reload
 sudo mkdir -p /usr/share/man/man1 /usr/share/man/man5 /usr/share/man/man7
 sudo cp docs/netctl.1 /usr/share/man/man1/
 sudo cp docs/nm-converter.1 /usr/share/man/man1/
-sudo cp docs/libnccli.1 /usr/share/man/man1/
+sudo cp docs/nccli.1 /usr/share/man/man1/
 sudo cp docs/netctl.nctl.5 /usr/share/man/man5/
 sudo cp docs/netctl-plugin.7 /usr/share/man/man7/
 sudo mandb
@@ -297,10 +297,10 @@ netctl wifi scan wlan0
 
 @subsection Connect to WiFi
 
-Using a connection file is recommended, but you can also use libnccli:
+Using a connection file is recommended, but you can also use nccli:
 
 @example
-sudo libnccli device wifi connect "NetworkName" --password "password"
+sudo nccli device wifi connect "NetworkName" --password "password"
 @end example
 
 @subsection Set Static IP Address
@@ -450,7 +450,7 @@ You can create connections in several ways:
 Manually create a @file{.nctl} file in @file{/etc/netctl/}
 
 @item
-Use @command{libnccli connection add} to create a connection
+Use @command{nccli connection add} to create a connection
 
 @item
 Convert from NetworkManager using @command{nm-converter}
@@ -923,12 +923,12 @@ See @file{/usr/share/doc/netctl/examples/} for complete examples.
 
 netctl includes several additional tools.
 
-@section libnccli
+@section nccli
 
-@command{libnccli} is a comprehensive CLI tool modeled after nmcli that provides
+@command{nccli} is a comprehensive CLI tool modeled after nmcli that provides
 extensive network management capabilities.
 
-@xref{Top, , , libnccli, libnccli Manual}, for complete documentation.
+@xref{Top, , , nccli, nccli Manual}, for complete documentation.
 
 Key features:
 @itemize @bullet

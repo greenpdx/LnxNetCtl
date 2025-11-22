@@ -10,7 +10,7 @@ Man pages are provided in standard roff format:
 
 - **netctl.1** - Main netctl command reference (section 1)
 - **nm-converter.1** - NetworkManager configuration converter (section 1)
-- **libnccli.1** - Comprehensive network CLI tool (section 1)
+- **nccli.1** - Comprehensive network CLI tool (section 1)
 - **netctl.nctl.5** - Connection configuration file format (section 5)
 - **netctl-plugin.7** - Plugin development guide (section 7)
 
@@ -26,7 +26,7 @@ Man pages are provided in standard roff format:
 - **DBUS_TEST_GUIDE.md** - D-Bus testing guide
 - **DHCP_CLIENT_INTEGRATION.md** - DHCP client integration guide
 - **LIBCR_COMPAT_API.md** - Library compatibility API
-- **libnccli.md** - libnccli detailed documentation
+- **nccli.md** - nccli detailed documentation
 
 ## Building Documentation
 
@@ -112,7 +112,7 @@ View man pages directly from this directory without installing:
 
 ```bash
 man -l netctl.1
-man -l libnccli.1
+man -l nccli.1
 man -l nm-converter.1
 man -l netctl.nctl.5
 man -l netctl-plugin.7
@@ -122,7 +122,7 @@ Or after installation:
 
 ```bash
 man netctl
-man libnccli
+man nccli
 man nm-converter
 man netctl.nctl
 man netctl-plugin
@@ -212,7 +212,7 @@ The info documentation is organized hierarchically:
 - **DHCP Configuration** - DHCP server setup
 - **VPN Support** - VPN configuration
 - **Configuration Files** - Connection file format
-- **Tools** - Additional utilities (libnccli, nm-converter)
+- **Tools** - Additional utilities (nccli, nm-converter)
 - **D-Bus Interface** - NetworkManager compatibility
 - **Security** - Security considerations
 - **Troubleshooting** - Common issues and solutions
@@ -236,7 +236,7 @@ When adding new features or commands:
 
 ## Man Page Sections
 
-- **Section 1**: User commands (netctl, libnccli, nm-converter)
+- **Section 1**: User commands (netctl, nccli, nm-converter)
 - **Section 5**: File formats (netctl.nctl)
 - **Section 7**: Miscellaneous (netctl-plugin)
 - **Section 8**: System administration commands (not used currently)

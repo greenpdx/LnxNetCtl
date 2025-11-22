@@ -17,7 +17,7 @@ TEXI_SRC = netctl.texi
 INFO_OUT = netctl.info
 
 # Man pages
-MAN1_PAGES = netctl.1 nm-converter.1 libnccli.1
+MAN1_PAGES = netctl.1 nm-converter.1 nccli.1
 MAN5_PAGES = netctl.nctl.5
 MAN7_PAGES = netctl-plugin.7
 

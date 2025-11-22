@@ -97,7 +97,7 @@ cargo build --release
 # Install binaries
 sudo cp target/release/netctl /usr/bin/
 sudo cp target/release/nm-converter /usr/bin/
-sudo cp target/release/libnccli /usr/bin/
+sudo cp target/release/nccli /usr/bin/
 
 # Install example configuration files
 sudo mkdir -p /usr/share/doc/netctl/examples
@@ -113,7 +113,7 @@ sudo systemctl daemon-reload
 sudo mkdir -p /usr/share/man/man1 /usr/share/man/man5 /usr/share/man/man7
 sudo cp docs/netctl.1 /usr/share/man/man1/
 sudo cp docs/nm-converter.1 /usr/share/man/man1/
-sudo cp docs/libnccli.1 /usr/share/man/man1/
+sudo cp docs/nccli.1 /usr/share/man/man1/
 sudo cp docs/netctl.nctl.5 /usr/share/man/man5/
 sudo cp docs/netctl-plugin.7 /usr/share/man/man7/
 sudo mandb  # Update man database

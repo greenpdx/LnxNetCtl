@@ -1,16 +1,16 @@
-.TH LIBNCCLI 1 "2025" "netctl" "User Commands"
+.TH NCCLI 1 "2025" "netctl" "User Commands"
 .SH NAME
-libnccli \- comprehensive network control command-line interface
+nccli \- comprehensive network control command-line interface
 .SH SYNOPSIS
-.B libnccli
+.B nccli
 [\fIOPTIONS\fR] \fICOMMAND\fR [\fIARGS\fR]
 .SH DESCRIPTION
-.B libnccli
+.B nccli
 is a comprehensive command-line interface for network management that provides complete
 network device and connection management using the netctl backend. It is modeled after
 nmcli and provides similar functionality for connection and device management.
 .PP
-.B libnccli
+.B nccli
 supports connection management, device management, WiFi operations, and multiple output
 formats including terse, tabular, and multiline modes for both human and machine-readable output.
 .SH COMMANDS
@@ -165,61 +165,61 @@ Runtime state directory
 .TP
 Show general network status:
 .EX
-libnccli
-libnccli general status
+nccli
+nccli general status
 .EE
 .TP
 List all connections:
 .EX
-libnccli connection show
+nccli connection show
 .EE
 .TP
 Create a new WiFi connection:
 .EX
-libnccli connection add --type wifi --con-name MyWiFi \\
+nccli connection add --type wifi --con-name MyWiFi \\
     --ifname wlan0 --ssid "MyNetwork" --password "MyPassword" \\
     --ip4 auto
 .EE
 .TP
 Activate a connection:
 .EX
-libnccli connection up MyWiFi
+nccli connection up MyWiFi
 .EE
 .TP
 List all devices:
 .EX
-libnccli device status
+nccli device status
 .EE
 .TP
 Show detailed device information:
 .EX
-libnccli device show wlan0
+nccli device show wlan0
 .EE
 .TP
 Scan for WiFi networks:
 .EX
-libnccli device wifi list
+nccli device wifi list
 .EE
 .TP
 Connect to a WiFi network:
 .EX
-libnccli device wifi connect "NetworkName" --password "password"
+nccli device wifi connect "NetworkName" --password "password"
 .EE
 .TP
 Create a WiFi hotspot:
 .EX
-libnccli device wifi hotspot --ssid "MyHotspot" \\
+nccli device wifi hotspot --ssid "MyHotspot" \\
     --password "mypassword"
 .EE
 .TP
 Monitor network changes:
 .EX
-libnccli monitor
+nccli monitor
 .EE
 .TP
 Machine-readable output:
 .EX
-libnccli -t device status
+nccli -t device status
 .EE
 .SH CONNECTION CONFIGURATION
 Connection configuration files are stored in

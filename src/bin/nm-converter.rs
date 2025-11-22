@@ -287,9 +287,16 @@ fn parse_vpn_section(
     let cert = vpn_section.get("cert").cloned();
     let key = vpn_section.get("key").cloned();
     let config_file = vpn_section.get("config").cloned();
-    let connection_type = vpn_section.get("connection-type").or_else(|| vpn_section.get("dev")).cloned();
+    let connection_type = vpn_section
+        .get("connection-type")
+        .or_else(|| vpn_section.get("dev"))
+        .cloned()
+        .unwrap_or_else(|| "openvpn".to_string());
 
     Ok(VpnSection {
+        connection_type,
+        wireguard: None,
+        openvpn: None,
         remote,
         port,
         proto,
@@ -297,7 +304,6 @@ fn parse_vpn_section(
         cert,
         key,
         config_file,
-        connection_type,
     })
 }
 
