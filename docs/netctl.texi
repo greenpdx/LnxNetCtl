@@ -1,0 +1,1156 @@
+\input texinfo   @c -*-texinfo-*-
+@c %**start of header
+@setfilename netctl.info
+@settitle netctl - Network Control Tool
+@documentencoding UTF-8
+@c %**end of header
+
+@copying
+This manual is for netctl (version 0.1.0), an async network management tool
+with NetworkManager D-Bus compatibility.
+
+Copyright @copyright{} 2025 CRRouter Team
+
+@quotation
+Permission is granted to copy, distribute and/or modify this document
+under the terms of the MIT OR Apache-2.0 license.
+@end quotation
+@end copying
+
+@titlepage
+@title netctl
+@subtitle Network Control Tool
+@subtitle Version 0.1.0
+@author CRRouter Team
+
+@page
+@vskip 0pt plus 1filll
+@insertcopying
+@end titlepage
+
+@contents
+
+@ifnottex
+@node Top
+@top netctl
+
+This manual documents netctl version 0.1.0, an async network management
+tool built on tokio for high performance.
+
+@insertcopying
+@end ifnottex
+
+@menu
+* Introduction::           Overview of netctl
+* Installation::           Installing netctl
+* Getting Started::        Quick start guide
+* Commands::               Command reference
+* Connection Management::  Managing network connections
+* Device Management::      Managing network devices
+* WiFi Operations::        WiFi scanning and connection
+* Access Point Mode::      Creating WiFi hotspots
+* DHCP Configuration::     DHCP server setup
+* VPN Support::            VPN configuration
+* Configuration Files::    Connection file format
+* Tools::                  Additional utilities
+* D-Bus Interface::        NetworkManager compatibility
+* Security::               Security considerations
+* Troubleshooting::        Common issues and solutions
+* Index::                  Complete index
+@end menu
+
+@node Introduction
+@chapter Introduction
+
+@cindex introduction
+@cindex overview
+
+netctl is an async network management tool with NetworkManager D-Bus compatibility.
+It provides a modern, high-performance alternative for network configuration on Linux systems.
+
+@section Features
+
+@itemize @bullet
+@item
+@strong{Async Architecture}: Built on tokio for high performance
+@item
+@strong{Interface Management}: Control network interfaces (up/down, IP configuration)
+@item
+@strong{WiFi Support}: Scan networks, manage connections, regulatory domain configuration
+@item
+@strong{Access Point Mode}: Create WiFi hotspots with hostapd
+@item
+@strong{DHCP Client}: Automatic DHCP via crdhcpc when links come up
+@item
+@strong{DHCP Server}: Configure dora DHCP server
+@item
+@strong{Link State Monitoring}: Automatically start DHCP when ethernet/WiFi links come up
+@item
+@strong{DNS Management}: Manage DNS configuration
+@item
+@strong{Routing Control}: Manage routing tables
+@item
+@strong{NetworkManager Compatible}: D-Bus interface for drop-in replacement
+@item
+@strong{VPN Support}: OpenVPN, WireGuard, and Tor via Arti
+@end itemize
+
+@section Architecture
+
+netctl uses an asynchronous architecture based on the tokio runtime,
+providing efficient handling of multiple network operations concurrently.
+It interfaces with the Linux kernel through netlink for network device
+management and uses external tools like iw, wpa_supplicant, and hostapd
+for WiFi operations.
+
+@node Installation
+@chapter Installation
+
+@cindex installation
+
+There are several ways to install netctl on your system.
+
+@section Dependencies
+
+@subsection Required Dependencies
+
+@table @strong
+@item iproute2
+Network interface management (usually pre-installed)
+
+@item iw or wireless-tools
+WiFi configuration
+
+@item wpasupplicant
+WPA/WPA2 authentication
+
+@item Unbound DNS Resolver
+Validating, recursive DNS resolver
+@end table
+
+@subsection Recommended Dependencies
+
+@table @strong
+@item Dora DHCP Server
+Modern DHCP server written in Rust
+@url{https://github.com/greenpdx/CRdoraPub.git}
+
+@item crdhcpc DHCP Client
+Comprehensive DHCP client written in Rust
+Provides automatic DHCP on link up for WiFi and ethernet
+@end table
+
+@subsection Optional Dependencies
+
+@table @strong
+@item hostapd
+For access point mode
+
+@item openvpn
+For OpenVPN VPN support
+
+@item wireguard-tools
+For WireGuard VPN support
+@end table
+
+@section Automated Installation (Recommended)
+
+The easiest way to install netctl is using the installation script:
+
+@example
+sudo ./install.sh
+@end example
+
+The install script will:
+@itemize @bullet
+@item Build the project with cargo
+@item Install binaries to /usr/bin
+@item Install systemd service files
+@item Create configuration directories
+@item Install man pages and documentation
+@item Install example configurations
+@item Set up runtime directories
+@end itemize
+
+To uninstall:
+
+@example
+sudo ./uninstall.sh
+@end example
+
+@section Debian Package Installation
+
+Build and install the Debian package:
+
+@example
+# Build the package
+dpkg-buildpackage -us -uc -b
+
+# Install the package
+sudo dpkg -i ../netctl_*.deb
+sudo apt --fix-broken install  # If needed
+@end example
+
+@section Manual Installation
+
+@example
+# Build the project
+cargo build --release
+
+# Install binaries
+sudo cp target/release/netctl /usr/bin/
+sudo cp target/release/nm-converter /usr/bin/
+sudo cp target/release/libnccli /usr/bin/
+
+# Install systemd service files
+sudo mkdir -p /lib/systemd/system
+sudo cp systemd/*.service /lib/systemd/system/
+sudo systemctl daemon-reload
+
+# Install man pages
+sudo mkdir -p /usr/share/man/man1 /usr/share/man/man5 /usr/share/man/man7
+sudo cp docs/netctl.1 /usr/share/man/man1/
+sudo cp docs/nm-converter.1 /usr/share/man/man1/
+sudo cp docs/libnccli.1 /usr/share/man/man1/
+sudo cp docs/netctl.nctl.5 /usr/share/man/man5/
+sudo cp docs/netctl-plugin.7 /usr/share/man/man7/
+sudo mandb
+
+# Install info documentation
+sudo mkdir -p /usr/share/info
+sudo cp docs/netctl.info /usr/share/info/
+sudo install-info /usr/share/info/netctl.info /usr/share/info/dir
+@end example
+
+@node Getting Started
+@chapter Getting Started
+
+@cindex getting started
+@cindex quick start
+
+This chapter provides a quick introduction to using netctl.
+
+@section Basic Workflow
+
+The recommended way to use netctl is through connection configuration files:
+
+@enumerate
+@item
+Create a connection configuration file in @file{/etc/netctl/}
+
+@item
+Activate the connection:
+@example
+netctl connection up my-wifi
+@end example
+
+@item
+Check connection status:
+@example
+netctl connection active
+@end example
+@end enumerate
+
+@section Your First Connection
+
+Create a WiFi connection file @file{/etc/netctl/home-wifi.nctl}:
+
+@example
+[connection]
+name = "home-wifi"
+type = "wifi"
+interface-name = "wlan0"
+autoconnect = true
+
+[wifi]
+ssid = "MyHomeNetwork"
+mode = "infrastructure"
+
+[wifi-security]
+key-mgmt = "wpa-psk"
+psk = "mypassword"
+
+[ipv4]
+method = "auto"
+@end example
+
+Activate the connection:
+
+@example
+sudo netctl connection up home-wifi
+@end example
+
+@section Common Tasks
+
+@subsection List Network Interfaces
+
+@example
+netctl interface list
+netctl device list
+@end example
+
+@subsection Scan for WiFi Networks
+
+@example
+netctl wifi scan wlan0
+@end example
+
+@subsection Connect to WiFi
+
+Using a connection file is recommended, but you can also use libnccli:
+
+@example
+sudo libnccli device wifi connect "NetworkName" --password "password"
+@end example
+
+@subsection Set Static IP Address
+
+@example
+sudo netctl interface set-ip eth0 192.168.1.100 --prefix 24
+@end example
+
+@node Commands
+@chapter Command Reference
+
+@cindex commands
+@cindex command reference
+
+This chapter provides a complete reference of all netctl commands.
+
+@section Device Commands
+
+@table @command
+@item netctl device list
+List all network devices
+
+@item netctl interface list
+List all network interfaces
+
+@item netctl interface show @var{interface}
+Show detailed information about an interface
+@end table
+
+@section Interface Control Commands
+
+@table @command
+@item netctl interface up @var{interface}
+Bring an interface up
+
+@item netctl interface down @var{interface}
+Bring an interface down
+
+@item netctl interface set-ip @var{interface} @var{address} --prefix @var{prefix}
+Set IP address on an interface
+
+@item netctl interface del-ip @var{interface} @var{address} --prefix @var{prefix}
+Delete IP address from an interface
+
+@item netctl interface set-mac @var{interface} @var{mac}
+Set MAC address on an interface
+
+@item netctl interface set-mtu @var{interface} @var{mtu}
+Set MTU on an interface
+@end table
+
+@section WiFi Commands
+
+@table @command
+@item netctl wifi list
+List all WiFi interfaces
+
+@item netctl wifi scan @var{interface}
+Scan for WiFi networks
+
+@item netctl wifi info @var{interface}
+Show WiFi device information
+
+@item netctl wifi get-reg
+Get regulatory domain
+
+@item netctl wifi set-reg @var{country}
+Set regulatory domain (e.g., US, GB, JP)
+
+@item netctl wifi get-txpower @var{interface}
+Get TX power
+
+@item netctl wifi set-txpower @var{interface} @var{power}
+Set TX power (e.g., 20dBm)
+@end table
+
+@section Access Point Commands
+
+@table @command
+@item netctl ap start @var{interface} --ssid @var{ssid} [--password @var{password}] [--channel @var{channel}]
+Start access point mode
+
+@item netctl ap stop
+Stop access point
+
+@item netctl ap status
+Show access point status
+@end table
+
+@section DHCP Server Commands
+
+@table @command
+@item netctl dhcp start @var{interface} --range-start @var{ip} --range-end @var{ip} --gateway @var{ip} --dns @var{ip}
+Start DHCP server with dora
+
+@item netctl dhcp write-config @var{interface} --range-start @var{ip} --range-end @var{ip} --gateway @var{ip} --dns @var{ip}
+Write DHCP configuration file
+@end table
+
+@section Routing Commands
+
+@table @command
+@item netctl route add-default @var{gateway} [--interface @var{interface}]
+Add default route
+@end table
+
+@section Connection Commands
+
+@table @command
+@item netctl connection list
+List saved connections
+
+@item netctl connection active
+Show active connections
+
+@item netctl connection up @var{name}
+Activate a connection
+
+@item netctl connection down @var{name}
+Deactivate a connection
+
+@item netctl connection delete @var{name}
+Delete a connection
+@end table
+
+@node Connection Management
+@chapter Connection Management
+
+@cindex connections
+@cindex connection management
+
+Connection management is the recommended way to configure networks in netctl.
+Connections are defined in configuration files and can be activated/deactivated
+as needed.
+
+@section Connection Files
+
+Connection files are stored in @file{/etc/netctl/} with the @file{.nctl} extension.
+They use TOML format and define all aspects of a network connection.
+
+@section Creating Connections
+
+You can create connections in several ways:
+
+@enumerate
+@item
+Manually create a @file{.nctl} file in @file{/etc/netctl/}
+
+@item
+Use @command{libnccli connection add} to create a connection
+
+@item
+Convert from NetworkManager using @command{nm-converter}
+@end enumerate
+
+@section Connection Types
+
+@subsection WiFi Connections
+
+Example WiFi connection with WPA2:
+
+@example
+[connection]
+name = "my-wifi"
+type = "wifi"
+interface-name = "wlan0"
+autoconnect = true
+
+[wifi]
+ssid = "MyNetwork"
+mode = "infrastructure"
+
+[wifi-security]
+key-mgmt = "wpa-psk"
+psk = "mypassword"
+
+[ipv4]
+method = "auto"
+@end example
+
+@subsection Ethernet Connections
+
+Example static IP ethernet connection:
+
+@example
+[connection]
+name = "eth-static"
+type = "ethernet"
+interface-name = "eth0"
+
+[ipv4]
+method = "manual"
+addresses = ["192.168.1.100/24"]
+gateway = "192.168.1.1"
+dns = ["8.8.8.8", "8.8.4.4"]
+@end example
+
+Example DHCP ethernet connection:
+
+@example
+[connection]
+name = "eth-dhcp"
+type = "ethernet"
+interface-name = "eth0"
+
+[ipv4]
+method = "auto"
+@end example
+
+@subsection VPN Connections
+
+Example OpenVPN connection:
+
+@example
+[connection]
+name = "vpn-office"
+type = "vpn"
+
+[vpn]
+service-type = "openvpn"
+config = "/etc/openvpn/client.conf"
+@end example
+
+@section Managing Connections
+
+@subsection Activating Connections
+
+@example
+sudo netctl connection up my-wifi
+@end example
+
+@subsection Deactivating Connections
+
+@example
+sudo netctl connection down my-wifi
+@end example
+
+@subsection Listing Connections
+
+@example
+netctl connection list
+@end example
+
+@subsection Viewing Active Connections
+
+@example
+netctl connection active
+@end example
+
+@node Device Management
+@chapter Device Management
+
+@cindex devices
+@cindex device management
+
+netctl provides comprehensive device management capabilities.
+
+@section Listing Devices
+
+View all network devices:
+
+@example
+netctl device list
+@end example
+
+View detailed information about a specific device:
+
+@example
+netctl interface show wlan0
+@end example
+
+@section Controlling Devices
+
+@subsection Bringing Interfaces Up/Down
+
+@example
+sudo netctl interface up wlan0
+sudo netctl interface down wlan0
+@end example
+
+@subsection Setting IP Addresses
+
+Add an IP address:
+
+@example
+sudo netctl interface set-ip eth0 192.168.1.100 --prefix 24
+@end example
+
+Remove an IP address:
+
+@example
+sudo netctl interface del-ip eth0 192.168.1.100 --prefix 24
+@end example
+
+@subsection Changing MAC Address
+
+@example
+sudo netctl interface set-mac eth0 00:11:22:33:44:55
+@end example
+
+@subsection Setting MTU
+
+@example
+sudo netctl interface set-mtu eth0 1400
+@end example
+
+@node WiFi Operations
+@chapter WiFi Operations
+
+@cindex wifi
+@cindex wireless
+
+netctl provides comprehensive WiFi management capabilities.
+
+@section Scanning for Networks
+
+Scan for available WiFi networks:
+
+@example
+netctl wifi scan wlan0
+@end example
+
+This will display a list of available networks with their SSIDs, signal strength,
+security settings, and channels.
+
+@section Regulatory Domain
+
+The regulatory domain determines which WiFi channels and power levels are legal
+in your location.
+
+Get current regulatory domain:
+
+@example
+netctl wifi get-reg
+@end example
+
+Set regulatory domain:
+
+@example
+sudo netctl wifi set-reg US
+@end example
+
+Common country codes: US (United States), GB (United Kingdom), JP (Japan),
+DE (Germany), FR (France), etc.
+
+@section TX Power Control
+
+Get current TX power:
+
+@example
+netctl wifi get-txpower wlan0
+@end example
+
+Set TX power:
+
+@example
+sudo netctl wifi set-txpower wlan0 20dBm
+@end example
+
+@section WiFi Information
+
+View detailed WiFi device information:
+
+@example
+netctl wifi info wlan0
+@end example
+
+This shows the current connection status, signal strength, channel, and other details.
+
+@node Access Point Mode
+@chapter Access Point Mode
+
+@cindex access point
+@cindex hotspot
+@cindex AP mode
+
+netctl can create WiFi access points using hostapd.
+
+@section Requirements
+
+@itemize @bullet
+@item
+hostapd must be installed
+@item
+WiFi adapter must support AP mode
+@item
+Interface must not be in use by another connection
+@end itemize
+
+@section Starting an Access Point
+
+Basic access point with WPA2:
+
+@example
+sudo netctl ap start wlan0 --ssid "MyHotspot" --password "secret123" --channel 6
+@end example
+
+Access point on 5GHz band:
+
+@example
+sudo netctl ap start wlan0 --ssid "MyHotspot" --password "secret123" \\
+    --channel 36 --band 5g
+@end example
+
+Open access point (no password):
+
+@example
+sudo netctl ap start wlan0 --ssid "OpenHotspot" --channel 6
+@end example
+
+@section Stopping an Access Point
+
+@example
+sudo netctl ap stop
+@end example
+
+@section Checking Access Point Status
+
+@example
+netctl ap status
+@end example
+
+@section DHCP with Access Point
+
+When running an access point, you typically want to provide DHCP service to clients:
+
+@example
+# Start the access point
+sudo netctl ap start wlan0 --ssid "MyHotspot" --password "secret123" --channel 6
+
+# Start DHCP server on the AP interface
+sudo netctl dhcp start wlan0 --range-start 10.255.24.10 \\
+    --range-end 10.255.24.250 --gateway 10.255.24.1 --dns 10.255.24.1
+@end example
+
+@node DHCP Configuration
+@chapter DHCP Configuration
+
+@cindex dhcp
+@cindex dhcp server
+@cindex dora
+
+netctl can configure and manage the dora DHCP server.
+
+@section Starting DHCP Server
+
+@example
+sudo netctl dhcp start wlan0 --range-start 10.255.24.10 \\
+    --range-end 10.255.24.250 --gateway 10.255.24.1 --dns 10.255.24.1
+@end example
+
+@section DHCP Configuration File
+
+netctl generates a dora configuration file at @file{/run/netctl/dora.yaml}.
+You can also write the configuration without starting the server:
+
+@example
+sudo netctl dhcp write-config wlan0 --range-start 10.255.24.10 \\
+    --range-end 10.255.24.250 --gateway 10.255.24.1 --dns 10.255.24.1
+@end example
+
+@section DHCP Client
+
+netctl integrates with crdhcpc DHCP client for automatic IP configuration.
+When a link comes up, netctl automatically starts DHCP client if configured.
+
+@node VPN Support
+@chapter VPN Support
+
+@cindex vpn
+@cindex openvpn
+@cindex wireguard
+@cindex tor
+
+netctl supports multiple VPN technologies.
+
+@section OpenVPN
+
+Example OpenVPN connection:
+
+@example
+[connection]
+name = "vpn-office"
+type = "vpn"
+
+[vpn]
+service-type = "openvpn"
+config = "/etc/openvpn/client.conf"
+@end example
+
+@section WireGuard
+
+Example WireGuard connection:
+
+@example
+[connection]
+name = "vpn-wireguard"
+type = "vpn"
+
+[vpn]
+service-type = "wireguard"
+config = "/etc/wireguard/wg0.conf"
+@end example
+
+@section Tor via Arti
+
+When built with the @code{vpn-tor} feature, netctl supports Tor via Arti:
+
+@example
+[connection]
+name = "vpn-tor"
+type = "vpn"
+
+[vpn]
+service-type = "arti"
+@end example
+
+@node Configuration Files
+@chapter Configuration Files
+
+@cindex configuration
+@cindex .nctl files
+@cindex toml
+
+Connection configuration files use TOML format with @file{.nctl} extension.
+
+@section File Location
+
+Connection files are stored in @file{/etc/netctl/}.
+
+@section File Format
+
+@subsection Connection Section
+
+@table @code
+@item name
+Connection name (required)
+
+@item type
+Connection type: ethernet, wifi, bridge, vlan, vpn (required)
+
+@item interface-name
+Network interface to use
+
+@item autoconnect
+Automatically connect on boot (true/false)
+
+@item uuid
+Unique identifier (generated if not specified)
+@end table
+
+@subsection WiFi Section
+
+@table @code
+@item ssid
+Network SSID (required for WiFi)
+
+@item mode
+WiFi mode: infrastructure, ap, adhoc
+
+@item band
+WiFi band: bg (2.4GHz), a (5GHz)
+
+@item channel
+WiFi channel number
+@end table
+
+@subsection WiFi Security Section
+
+@table @code
+@item key-mgmt
+Key management: none, wpa-psk, wpa-eap, sae
+
+@item psk
+Pre-shared key (password) for WPA-PSK
+
+@item auth-alg
+Authentication algorithm: open, shared
+@end table
+
+@subsection IPv4 Section
+
+@table @code
+@item method
+Configuration method: auto (DHCP), manual, disabled
+
+@item addresses
+List of static IP addresses (CIDR notation)
+
+@item gateway
+Default gateway IP address
+
+@item dns
+List of DNS server IP addresses
+@end table
+
+@subsection IPv6 Section
+
+Similar to IPv4 section but for IPv6 configuration.
+
+@subsection VPN Section
+
+@table @code
+@item service-type
+VPN service: openvpn, wireguard, arti
+
+@item config
+Path to VPN configuration file
+@end table
+
+@section Example Files
+
+See @file{/usr/share/doc/netctl/examples/} for complete examples.
+
+@node Tools
+@chapter Additional Tools
+
+@cindex tools
+@cindex utilities
+
+netctl includes several additional tools.
+
+@section libnccli
+
+@command{libnccli} is a comprehensive CLI tool modeled after nmcli that provides
+extensive network management capabilities.
+
+@xref{Top, , , libnccli, libnccli Manual}, for complete documentation.
+
+Key features:
+@itemize @bullet
+@item Connection management
+@item Device management
+@item WiFi operations
+@item Multiple output formats (terse, tabular, multiline)
+@item NetworkManager-style interface
+@end itemize
+
+@section nm-converter
+
+@command{nm-converter} converts NetworkManager @file{.nmconnection} files to
+netctl @file{.nctl} format.
+
+Convert a single file:
+
+@example
+nm-converter /etc/NetworkManager/system-connections/WiFi.nmconnection
+@end example
+
+Convert all files in a directory:
+
+@example
+nm-converter -d /etc/NetworkManager/system-connections \\
+    --output-dir /etc/netctl
+@end example
+
+@xref{Top, , , nm-converter, nm-converter Manual}, for complete documentation.
+
+@node D-Bus Interface
+@chapter D-Bus Interface
+
+@cindex dbus
+@cindex networkmanager compatibility
+
+When built with the @code{dbus-nm} feature (default), netctl provides a
+NetworkManager-compatible D-Bus interface.
+
+@section Service Information
+
+@table @code
+@item Service name
+org.freedesktop.NetworkManager
+
+@item Object path
+/org/freedesktop/NetworkManager
+
+@item Interfaces
+NetworkManager, NetworkControl, WiFi, VPN, and others
+@end table
+
+@section Compatibility
+
+The D-Bus interface allows applications expecting NetworkManager to work with
+netctl without modification. This includes desktop environments, system tray
+applets, and other network management tools.
+
+@section Testing
+
+A comprehensive D-Bus test program is available:
+
+@example
+# Mock mode (simulated service)
+cargo run --example dbus_test -- --mode mock
+
+# Real mode (actual netctl daemon)
+cargo run --example dbus_test -- --mode real
+@end example
+
+@node Security
+@chapter Security Considerations
+
+@cindex security
+
+@section File Permissions
+
+Connection configuration files should be protected with appropriate permissions:
+
+@example
+sudo chmod 600 /etc/netctl/*.nctl
+sudo chown root:root /etc/netctl/*.nctl
+@end example
+
+@section Password Storage
+
+WiFi passwords and VPN credentials are stored in plain text in configuration files.
+Consider using:
+
+@itemize @bullet
+@item
+File system encryption (LUKS, eCryptfs)
+@item
+Restrictive file permissions (0600)
+@item
+SELinux or AppArmor policies
+@end itemize
+
+@section Input Validation
+
+netctl validates all user input to prevent:
+
+@itemize @bullet
+@item
+Path traversal attacks
+@item
+Command injection
+@item
+SQL injection (not applicable - no database)
+@item
+Invalid network configurations
+@end itemize
+
+@section Privilege Requirements
+
+Most netctl operations require root privileges. Use sudo carefully and restrict
+access to the netctl commands to trusted users.
+
+@node Troubleshooting
+@chapter Troubleshooting
+
+@cindex troubleshooting
+@cindex debugging
+
+@section Common Issues
+
+@subsection Connection Won't Activate
+
+@enumerate
+@item
+Check that the interface exists:
+@example
+netctl interface list
+@end example
+
+@item
+Verify the configuration file syntax:
+@example
+cat /etc/netctl/my-connection.nctl
+@end example
+
+@item
+Check system logs:
+@example
+journalctl -u netctl -n 50
+@end example
+@end enumerate
+
+@subsection WiFi Scan Shows No Networks
+
+@itemize @bullet
+@item
+Ensure WiFi radio is enabled:
+@example
+sudo netctl wifi set-reg US
+@end example
+
+@item
+Check that interface is up:
+@example
+sudo netctl interface up wlan0
+@end example
+
+@item
+Verify driver is loaded:
+@example
+lsmod | grep wifi
+@end example
+@end itemize
+
+@subsection Access Point Won't Start
+
+@itemize @bullet
+@item
+Check if hostapd is installed
+@item
+Verify interface supports AP mode
+@item
+Ensure interface is not in use
+@item
+Check hostapd logs:
+@example
+journalctl -u hostapd -n 20
+@end example
+@end itemize
+
+@subsection DHCP Not Working
+
+@itemize @bullet
+@item
+Verify dora is installed
+@item
+Check DHCP configuration:
+@example
+cat /run/netctl/dora.yaml
+@end example
+@item
+Check dora logs
+@end itemize
+
+@section Enabling Debug Logging
+
+Set the @env{RUST_LOG} environment variable:
+
+@example
+RUST_LOG=debug netctl wifi scan wlan0
+@end example
+
+@section Getting Help
+
+@itemize @bullet
+@item
+Read the man pages: @command{man netctl}
+@item
+Check example configurations in @file{/usr/share/doc/netctl/examples/}
+@item
+Report bugs via GitHub issues
+@end itemize
+
+@node Index
+@unnumbered Index
+
+@printindex cp
+
+@bye

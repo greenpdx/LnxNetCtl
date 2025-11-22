@@ -136,6 +136,40 @@ else
     print_warning "docs directory not found, skipping man page installation"
 fi
 
+# Install info documentation
+print_info "Installing info documentation..."
+if command -v makeinfo &> /dev/null; then
+    if [ -f "docs/netctl.texi" ]; then
+        INFODIR="${PREFIX}/share/info"
+        mkdir -p "${INFODIR}"
+
+        # Build info documentation
+        print_info "Building info documentation from Texinfo source..."
+        (cd docs && makeinfo --no-split -o netctl.info netctl.texi) || {
+            print_warning "Failed to build info documentation (non-fatal)"
+        }
+
+        # Install info file if it was built successfully
+        if [ -f "docs/netctl.info" ]; then
+            install -D -m 644 docs/netctl.info "${INFODIR}/netctl.info"
+
+            # Register with info directory
+            if command -v install-info &> /dev/null; then
+                install-info "${INFODIR}/netctl.info" "${INFODIR}/dir" 2>/dev/null || {
+                    print_warning "Failed to register info documentation (non-fatal)"
+                }
+                print_success "Info documentation installed and registered"
+            else
+                print_success "Info documentation installed (install-info not available)"
+            fi
+        fi
+    else
+        print_warning "docs/netctl.texi not found, skipping info documentation"
+    fi
+else
+    print_warning "makeinfo not found, skipping info documentation (install texinfo package)"
+fi
+
 # Install documentation and examples
 print_info "Installing documentation and examples..."
 mkdir -p "${DOC_DIR}"
@@ -208,7 +242,10 @@ print_info "     sudo systemctl status netctl"
 echo ""
 print_info "For more information, see:"
 print_info "  - man netctl"
+print_info "  - man libnccli"
+print_info "  - man nm-converter"
 print_info "  - man netctl.nctl"
+print_info "  - info netctl (comprehensive documentation)"
 print_info "  - ${DOC_DIR}/README.md"
 echo ""
 print_warning "Note: If you were using NetworkManager, you may want to disable it:"

@@ -121,6 +121,22 @@ rm -f "${MAN5_DIR}/netctl.nctl.5"
 rm -f "${MAN7_DIR}/netctl-plugin.7"
 print_success "Man pages removed"
 
+# Remove info documentation
+print_info "Removing info documentation..."
+INFODIR="${PREFIX}/share/info"
+if [ -f "${INFODIR}/netctl.info" ]; then
+    # Unregister from info directory
+    if command -v install-info &> /dev/null; then
+        install-info --delete "${INFODIR}/netctl.info" "${INFODIR}/dir" 2>/dev/null || {
+            print_warning "Failed to unregister info documentation (non-fatal)"
+        }
+    fi
+    rm -f "${INFODIR}/netctl.info"
+    print_success "Info documentation removed"
+else
+    print_info "Info documentation not found, skipping"
+fi
+
 # Remove documentation
 print_info "Removing documentation..."
 rm -rf "${DOC_DIR}"

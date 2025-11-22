@@ -1,0 +1,279 @@
+.TH LIBNCCLI 1 "2025" "netctl" "User Commands"
+.SH NAME
+libnccli \- comprehensive network control command-line interface
+.SH SYNOPSIS
+.B libnccli
+[\fIOPTIONS\fR] \fICOMMAND\fR [\fIARGS\fR]
+.SH DESCRIPTION
+.B libnccli
+is a comprehensive command-line interface for network management that provides complete
+network device and connection management using the netctl backend. It is modeled after
+nmcli and provides similar functionality for connection and device management.
+.PP
+.B libnccli
+supports connection management, device management, WiFi operations, and multiple output
+formats including terse, tabular, and multiline modes for both human and machine-readable output.
+.SH COMMANDS
+.SS General Commands
+.TP
+.B general status
+Show network system status
+.TP
+.B general hostname [\fIHOSTNAME\fR]
+Get or set system hostname
+.TP
+.B general permissions
+Show current user capabilities
+.TP
+.B general logging [\fILEVEL\fR] [\fIDOMAINS\fR]
+Get or set logging level and domains
+.SS Networking Control
+.TP
+.B networking on
+Enable networking (bring all interfaces up)
+.TP
+.B networking off
+Disable networking (bring all interfaces down)
+.TP
+.B networking connectivity
+Get network connectivity state
+.SS Radio Control
+.TP
+.B radio all
+Show all radio switches status
+.TP
+.B radio wifi [on|off]
+Get or set WiFi radio state
+.SS Connection Management
+.TP
+.B connection show [\fINAME\fR]
+List configured connections or show details of a specific connection
+.TP
+.B connection up \fINAME\fR [\fIOPTIONS\fR]
+Activate a connection
+.TP
+.B connection down \fINAME\fR
+Deactivate a connection
+.TP
+.B connection add \fITYPE\fR \fIOPTIONS\fR
+Add a new connection
+.TP
+.B connection modify \fINAME\fR \fIOPTIONS\fR
+Modify an existing connection
+.TP
+.B connection edit \fINAME\fR
+Edit a connection interactively
+.TP
+.B connection delete \fINAME\fR
+Delete a connection
+.TP
+.B connection reload
+Reload all connection files from disk
+.TP
+.B connection load \fIFILE\fR
+Load or reload a specific connection file
+.TP
+.B connection import \fIFILE\fR
+Import an external configuration
+.TP
+.B connection export \fINAME\fR \fIFILE\fR
+Export a connection to a file
+.TP
+.B connection clone \fINAME\fR \fINEW-NAME\fR
+Clone an existing connection
+.SS Device Management
+.TP
+.B device status [\fIDEVICE\fR]
+Show device status
+.TP
+.B device show \fIDEVICE\fR
+Show detailed device information
+.TP
+.B device set \fIDEVICE\fR \fIPROPERTY\fR \fIVALUE\fR
+Set device properties
+.TP
+.B device connect \fIDEVICE\fR
+Connect a device
+.TP
+.B device reapply \fIDEVICE\fR
+Reapply connection to device
+.TP
+.B device modify \fIDEVICE\fR \fIOPTIONS\fR
+Modify active connection on device
+.TP
+.B device disconnect \fIDEVICE\fR
+Disconnect a device
+.TP
+.B device delete \fIDEVICE\fR
+Delete a software device
+.TP
+.B device monitor [\fIDEVICE\fR]
+Monitor device activity
+.TP
+.B device lldp [\fIDEVICE\fR]
+Show LLDP neighbors
+.SS WiFi Device Commands
+.TP
+.B device wifi list [\fIDEVICE\fR]
+List available WiFi access points
+.TP
+.B device wifi connect \fISSID\fR [--password \fIPASSWORD\fR]
+Connect to a WiFi network
+.TP
+.B device wifi hotspot [--ssid \fISSID\fR] [--password \fIPASSWORD\fR]
+Create a WiFi hotspot
+.TP
+.B device wifi radio [on|off]
+Turn WiFi radio on or off
+.SS Monitoring
+.TP
+.B monitor
+Monitor network activity and changes
+.SH OPTIONS
+.TP
+.B -t, --terse
+Terse output mode (machine-readable, values separated by colons)
+.TP
+.B -p, --pretty
+Pretty output mode (human-readable, default)
+.TP
+.B -m, --mode \fIMODE\fR
+Output mode: tabular, multiline, or terse
+.TP
+.B -f, --fields \fIFIELDS\fR
+Specify fields to output (comma-separated list)
+.TP
+.B -c, --colors \fICOLOR\fR
+Use colors in output: yes, no, or auto (default: auto)
+.TP
+.B -h, --help
+Print help information
+.TP
+.B -V, --version
+Print version information
+.SH FILES
+.TP
+.I /etc/netctl/*.nctl
+Connection configuration files (TOML format)
+.TP
+.I /usr/share/doc/netctl/examples/
+Example connection configuration files
+.TP
+.I /run/netctl/
+Runtime state directory
+.SH EXAMPLES
+.TP
+Show general network status:
+.EX
+libnccli
+libnccli general status
+.EE
+.TP
+List all connections:
+.EX
+libnccli connection show
+.EE
+.TP
+Create a new WiFi connection:
+.EX
+libnccli connection add --type wifi --con-name MyWiFi \\
+    --ifname wlan0 --ssid "MyNetwork" --password "MyPassword" \\
+    --ip4 auto
+.EE
+.TP
+Activate a connection:
+.EX
+libnccli connection up MyWiFi
+.EE
+.TP
+List all devices:
+.EX
+libnccli device status
+.EE
+.TP
+Show detailed device information:
+.EX
+libnccli device show wlan0
+.EE
+.TP
+Scan for WiFi networks:
+.EX
+libnccli device wifi list
+.EE
+.TP
+Connect to a WiFi network:
+.EX
+libnccli device wifi connect "NetworkName" --password "password"
+.EE
+.TP
+Create a WiFi hotspot:
+.EX
+libnccli device wifi hotspot --ssid "MyHotspot" \\
+    --password "mypassword"
+.EE
+.TP
+Monitor network changes:
+.EX
+libnccli monitor
+.EE
+.TP
+Machine-readable output:
+.EX
+libnccli -t device status
+.EE
+.SH CONNECTION CONFIGURATION
+Connection configuration files are stored in
+.I /etc/netctl/
+in TOML format with .nctl extension.
+.PP
+Example WiFi connection file (MyWiFi.nctl):
+.EX
+[connection]
+name = "MyWiFi"
+type = "wifi"
+interface-name = "wlan0"
+autoconnect = true
+
+[wifi]
+ssid = "MyNetwork"
+mode = "infrastructure"
+
+[wifi-security]
+key-mgmt = "wpa-psk"
+psk = "MyPassword"
+
+[ipv4]
+method = "auto"
+.EE
+.SH SECURITY
+.SS Input Validation
+.TP
+.B Connection Names
+Validated to prevent path traversal attacks. Only alphanumeric characters, hyphens,
+underscores, and dots are allowed (maximum 64 characters).
+.TP
+.B WiFi SSIDs
+Validated according to IEEE 802.11 standards (1-32 bytes, no control characters).
+.TP
+.B WiFi Passwords
+Validated for WPA2/WPA3 compliance (8-63 ASCII characters).
+.SS File Security
+Configuration files are created with 0600 permissions (read/write for owner only).
+WiFi passwords are stored in plain text in configuration files - ensure proper
+file system permissions and consider using file system encryption for sensitive deployments.
+.SS Access Control
+Network operations require appropriate system permissions (typically root/sudo).
+All commands validate input before executing system operations. Path traversal
+attacks are prevented through strict validation of file paths.
+.SH SEE ALSO
+.BR netctl (1),
+.BR netctl.nctl (5),
+.BR nm-converter (1),
+.BR netctl-plugin (7),
+.BR nmcli (1)
+.SH AUTHOR
+Written for the netctl project.
+.SH REPORTING BUGS
+Report bugs via GitHub issues.
+.SH COPYRIGHT
+Copyright \(co 2025. License: MIT OR Apache-2.0
