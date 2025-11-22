@@ -3,7 +3,7 @@
 //! This example shows how to use the CR* API which provides
 //! NetworkManager libnm-compatible functionality.
 
-use netctl::{CRClient, CRDeviceType, CRDeviceState};
+use libnetctl::{CRClient, CRDeviceType, CRDeviceState};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

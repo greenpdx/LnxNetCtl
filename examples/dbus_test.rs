@@ -19,7 +19,7 @@
 //! cargo run --example dbus_test -- --mode mock --test all
 //! ```
 
-use netctl::cr_dbus::{
+use libnetctl::cr_dbus::{
     CRDbusService,
     CRNetworkState, CRConnectivity, CRDeviceType, CRDeviceState,
     CRDeviceInfo, CRAccessPointInfo, CRVpnInfo, CRWiFiSecurity,
@@ -32,7 +32,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{info, warn, error};
 use tracing_subscriber;
-use zbus::{Connection, dbus_proxy};
+use zbus::Connection;
 
 /// Test mode
 #[derive(Debug, Clone, ValueEnum)]
@@ -84,7 +84,7 @@ struct Args {
 // D-Bus Proxy Definitions (for Real Mode)
 // ============================================================================
 
-#[dbus_proxy(
+#[zbus::proxy(
     interface = "org.crrouter.NetworkControl",
     default_service = "org.crrouter.NetworkControl",
     default_path = "/org/crrouter/NetworkControl"
@@ -135,7 +135,7 @@ trait NetworkControl {
     // Note: Signals are typically monitored separately in zbus, not called directly
 }
 
-#[dbus_proxy(
+#[zbus::proxy(
     interface = "org.crrouter.NetworkControl.WiFi",
     default_service = "org.crrouter.NetworkControl",
     default_path = "/org/crrouter/NetworkControl/WiFi"
@@ -174,7 +174,7 @@ trait WiFi {
     // Note: Signals are typically monitored separately in zbus, not called directly
 }
 
-#[dbus_proxy(
+#[zbus::proxy(
     interface = "org.crrouter.NetworkControl.VPN",
     default_service = "org.crrouter.NetworkControl",
     default_path = "/org/crrouter/NetworkControl/VPN"
@@ -723,7 +723,7 @@ async fn run_signal_tests(
 
     // Simulate WiFi connection
     service.wifi().set_current_ssid(Some("TestNetwork1".to_string())).await;
-    if let Err(e) = netctl::cr_dbus::wifi::signals::emit_connected(
+    if let Err(e) = libnetctl::cr_dbus::wifi::signals::emit_connected(
         service.connection().as_ref(),
         "TestNetwork1"
     ).await {
