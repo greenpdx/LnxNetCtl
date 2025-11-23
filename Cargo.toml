@@ -107,8 +107,15 @@ copyright = "2025, CRRouter Team"
 license-file = ["LICENSE-MIT", "0"]
 extended-description = """
 Network control tool providing command-line interface for managing
-network interfaces, WiFi, Access Points, DHCP, and DNS. Includes
-NetworkManager D-Bus compatibility layer for drop-in replacement.
+network interfaces, WiFi, Access Points, DHCP, DNS, VPN, and routing.
+
+Includes:
+- netctld: Dedicated daemon with CR D-Bus interface (org.crrouter.NetworkControl)
+- nccli: Command-line interface supporting both direct and D-Bus modes
+- netctl: NetworkManager D-Bus compatibility for drop-in replacement
+- nm-converter: Tool to convert NetworkManager profiles to netctl format
+
+Supports WireGuard, OpenVPN, IPsec VPNs and WiFi hotspot functionality.
 """
 depends = "$auto, iproute2, iw"
 section = "net"
@@ -119,6 +126,7 @@ assets = [
     ["target/release/netctld", "usr/bin/", "755"],
     ["target/release/nm-converter", "usr/bin/", "755"],
     ["README.md", "usr/share/doc/netctl/", "644"],
+    ["INSTALL_SYSTEMD.md", "usr/share/doc/netctl/", "644"],
     ["systemd/netctl.service", "lib/systemd/system/", "644"],
     ["systemd/netctld.service", "lib/systemd/system/", "644"],
     ["systemd/netctl@.service", "lib/systemd/system/", "644"],

@@ -24,11 +24,13 @@ Recommends: dora-dhcp
 Suggests: hostapd,
           openvpn,
           wireguard-tools
-Description: Async network management tool
+Description: Async network management tool with D-Bus daemon
  netctl is an async network management tool built on tokio for high
  performance. It provides comprehensive network administration capabilities
  including:
  .
+  * netctld daemon with CR D-Bus interface (org.crrouter.NetworkControl)
+  * nccli command-line tool with --use-dbus support
   * Interface management (up/down, IP configuration)
   * WiFi support (scan, connect, regulatory domain)
   * Access point mode with hostapd integration
@@ -36,9 +38,9 @@ Description: Async network management tool
   * DNS management with unbound integration
   * Routing control
   * Bridge and VLAN support
-  * VPN support (OpenVPN, WireGuard)
-  * NetworkManager D-Bus compatibility
+  * VPN support (OpenVPN, WireGuard, IPsec, Tor via Arti)
+  * NetworkManager D-Bus compatibility layer
   * Plugin system for extensibility
  .
- netctl can be used as a drop-in replacement for NetworkManager with its
- D-Bus compatibility layer, or as a standalone network management solution.
+ The package includes both netctld (modern CR D-Bus daemon) and netctl
+ (NetworkManager compatibility daemon). Use netctld for new installations.
