@@ -163,6 +163,10 @@ pub mod network_control;
 pub mod device;
 pub mod wifi;
 pub mod vpn;
+pub mod connection;
+pub mod dhcp;
+pub mod dns;
+pub mod routing;
 pub mod integration;
 
 // Re-exports for convenience
@@ -171,6 +175,10 @@ pub use network_control::CRNetworkControl;
 pub use device::CRDevice;
 pub use wifi::CRWiFi;
 pub use vpn::CRVPN;
+pub use connection::CRConnection;
+pub use dhcp::CRDhcp;
+pub use dns::CRDns;
+pub use routing::CRRouting;
 pub use integration::CRDbusService;
 
 /// Library version

@@ -17,6 +17,10 @@ use zbus::zvariant::Value;
 pub struct CRDevice {
     /// Device information
     info: Arc<RwLock<CRDeviceInfo>>,
+    /// Autoconnect enabled
+    autoconnect: Arc<RwLock<bool>>,
+    /// Device managed by NetworkControl
+    managed: Arc<RwLock<bool>>,
 }
 
 impl CRDevice {
@@ -24,6 +28,8 @@ impl CRDevice {
     pub fn new(info: CRDeviceInfo) -> Self {
         Self {
             info: Arc::new(RwLock::new(info)),
+            autoconnect: Arc::new(RwLock::new(true)),  // Default to autoconnect enabled
+            managed: Arc::new(RwLock::new(true)),      // Default to managed
         }
     }
 
@@ -149,6 +155,44 @@ impl CRDevice {
         info.mtu = mtu;
         // MTU change will be handled by integration layer
         Ok(())
+    }
+
+    /// Set autoconnect enabled/disabled
+    async fn set_autoconnect(&self, enabled: bool) -> fdo::Result<()> {
+        let interface = {
+            let info = self.info.read().await;
+            info.interface.clone()
+        };
+
+        info!("CR Device {}: Setting autoconnect to {}", interface, enabled);
+        let mut autoconnect = self.autoconnect.write().await;
+        *autoconnect = enabled;
+        // Autoconnect setting will be handled by integration layer
+        Ok(())
+    }
+
+    /// Get autoconnect status
+    async fn get_autoconnect(&self) -> bool {
+        *self.autoconnect.read().await
+    }
+
+    /// Set whether device is managed by NetworkControl
+    async fn set_managed(&self, managed: bool) -> fdo::Result<()> {
+        let interface = {
+            let info = self.info.read().await;
+            info.interface.clone()
+        };
+
+        info!("CR Device {}: Setting managed to {}", interface, managed);
+        let mut mgd = self.managed.write().await;
+        *mgd = managed;
+        // Managed setting will be handled by integration layer
+        Ok(())
+    }
+
+    /// Get managed status
+    async fn get_managed(&self) -> bool {
+        *self.managed.read().await
     }
 
     // ============ D-Bus Signals ============

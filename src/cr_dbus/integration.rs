@@ -6,6 +6,10 @@
 use super::network_control::CRNetworkControl;
 use super::wifi::CRWiFi;
 use super::vpn::CRVPN;
+use super::connection::CRConnection;
+use super::dhcp::CRDhcp;
+use super::dns::CRDns;
+use super::routing::CRRouting;
 use super::types::*;
 use crate::error::{NetctlError, NetctlResult};
 use crate::device::{DeviceController, Device};
@@ -27,6 +31,14 @@ pub struct CRDbusService {
     wifi: Arc<CRWiFi>,
     /// VPN interface
     vpn: Arc<CRVPN>,
+    /// Connection management interface
+    conn_mgmt: Arc<CRConnection>,
+    /// DHCP server interface
+    dhcp: Arc<CRDhcp>,
+    /// DNS server interface
+    dns: Arc<CRDns>,
+    /// Routing interface
+    routing: Arc<CRRouting>,
     /// Running state
     running: Arc<RwLock<bool>>,
 }
@@ -46,6 +58,10 @@ impl CRDbusService {
         let network_control = CRNetworkControl::new();
         let wifi = CRWiFi::new();
         let vpn = CRVPN::new();
+        let conn_mgmt = CRConnection::new();
+        let dhcp = CRDhcp::new();
+        let dns = CRDns::new();
+        let routing = CRRouting::new();
 
         // Register network control interface
         connection
@@ -75,10 +91,50 @@ impl CRDbusService {
 
         info!("Registered CR VPN interface at {}", vpn_path);
 
+        // Register Connection interface
+        connection
+            .object_server()
+            .at(CR_CONNECTION_PATH, conn_mgmt.clone())
+            .await
+            .map_err(|e| NetctlError::ServiceError(format!("Failed to register Connection: {}", e)))?;
+
+        info!("Registered CR Connection interface at {}", CR_CONNECTION_PATH);
+
+        // Register DHCP interface
+        connection
+            .object_server()
+            .at(CR_DHCP_PATH, dhcp.clone())
+            .await
+            .map_err(|e| NetctlError::ServiceError(format!("Failed to register DHCP: {}", e)))?;
+
+        info!("Registered CR DHCP interface at {}", CR_DHCP_PATH);
+
+        // Register DNS interface
+        connection
+            .object_server()
+            .at(CR_DNS_PATH, dns.clone())
+            .await
+            .map_err(|e| NetctlError::ServiceError(format!("Failed to register DNS: {}", e)))?;
+
+        info!("Registered CR DNS interface at {}", CR_DNS_PATH);
+
+        // Register Routing interface
+        connection
+            .object_server()
+            .at(CR_ROUTING_PATH, routing.clone())
+            .await
+            .map_err(|e| NetctlError::ServiceError(format!("Failed to register Routing: {}", e)))?;
+
+        info!("Registered CR Routing interface at {}", CR_ROUTING_PATH);
+
         // Store Arc references for later use
         let network_control = Arc::new(network_control);
         let wifi = Arc::new(wifi);
         let vpn = Arc::new(vpn);
+        let conn_mgmt = Arc::new(conn_mgmt);
+        let dhcp = Arc::new(dhcp);
+        let dns = Arc::new(dns);
+        let routing = Arc::new(routing);
 
         // Request well-known name
         match connection.request_name(CR_DBUS_SERVICE).await {
@@ -96,6 +152,10 @@ impl CRDbusService {
             network_control,
             wifi,
             vpn,
+            conn_mgmt,
+            dhcp,
+            dns,
+            routing,
             running: Arc::new(RwLock::new(true)),
         });
 
@@ -129,6 +189,26 @@ impl CRDbusService {
     /// Get VPN interface
     pub fn vpn(&self) -> Arc<CRVPN> {
         self.vpn.clone()
+    }
+
+    /// Get Connection management interface
+    pub fn connection_mgmt(&self) -> Arc<CRConnection> {
+        self.conn_mgmt.clone()
+    }
+
+    /// Get DHCP server interface
+    pub fn dhcp(&self) -> Arc<CRDhcp> {
+        self.dhcp.clone()
+    }
+
+    /// Get DNS server interface
+    pub fn dns(&self) -> Arc<CRDns> {
+        self.dns.clone()
+    }
+
+    /// Get Routing interface
+    pub fn routing(&self) -> Arc<CRRouting> {
+        self.routing.clone()
     }
 
     /// Get D-Bus connection

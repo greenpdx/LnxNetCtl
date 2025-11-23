@@ -59,6 +59,10 @@ struct Cli {
     /// Show secrets when displaying passwords
     #[arg(short = 's', long)]
     show_secrets: bool,
+
+    /// Use D-Bus to communicate with netctld daemon (default: auto-detect)
+    #[arg(long)]
+    use_dbus: bool,
 }
 
 #[derive(Clone, ValueEnum)]
@@ -1600,7 +1604,127 @@ async fn handle_device(cmd: &DeviceCommands, cli: &Cli) -> NetctlResult<()> {
     Ok(())
 }
 
+/// Handle WiFi commands using D-Bus client (communicates with netctld daemon)
+async fn handle_device_wifi_dbus(cmd: &WifiDeviceCommands, cli: &Cli) -> NetctlResult<()> {
+    use libnetctl::NetctlClient;
+
+    // Connect to netctld daemon via D-Bus
+    let client = NetctlClient::connect().await.map_err(|e| {
+        NetctlError::ServiceError(format!(
+            "Failed to connect to netctld daemon: {}. Is netctld running?", e
+        ))
+    })?;
+
+    match cmd {
+        WifiDeviceCommands::List { ifname: _, bssid: _, rescan: _ } => {
+            // Trigger WiFi scan
+            client.wifi_scan().await?;
+
+            // Get access points
+            let aps = client.wifi_get_access_points().await?;
+
+            if cli.terse {
+                // Terse output format
+                for ap in aps {
+                    let ssid = match ap.get("SSID").and_then(|v| v.downcast_ref::<&str>().ok()) {
+                        Some(s) => s,
+                        None => &"",
+                    };
+                    let bssid = match ap.get("BSSID").and_then(|v| v.downcast_ref::<&str>().ok()) {
+                        Some(s) => s,
+                        None => &"",
+                    };
+                    let signal = ap.get("Signal")
+                        .and_then(|v| v.downcast_ref::<i32>().ok())
+                        .unwrap_or(0);
+
+                    println!("{}:{}:{}:{}:*", bssid, ssid, "Infra", signal);
+                }
+            } else {
+                // Pretty output format
+                println!("{:3} {:32} {:3} {:4} {:17} {:6} {:8} {:10}",
+                        "IN-USE", "SSID", "MODE", "CHAN", "RATE", "SIGNAL", "BARS", "SECURITY");
+
+                for ap in aps {
+                    let ssid = match ap.get("SSID").and_then(|v| v.downcast_ref::<&str>().ok()) {
+                        Some(s) => s,
+                        None => &"",
+                    };
+                    let bssid = match ap.get("BSSID").and_then(|v| v.downcast_ref::<&str>().ok()) {
+                        Some(s) => s,
+                        None => &"",
+                    };
+                    let signal = ap.get("Signal")
+                        .and_then(|v| v.downcast_ref::<i32>().ok())
+                        .unwrap_or(0);
+                    let frequency = ap.get("Frequency")
+                        .and_then(|v| v.downcast_ref::<u32>().ok())
+                        .unwrap_or(0);
+
+                    let channel = if frequency > 5000 {
+                        (frequency - 5000) / 5
+                    } else if frequency > 2400 {
+                        (frequency - 2407) / 5
+                    } else {
+                        0
+                    };
+
+                    let bars = if signal > -50 {
+                        "▂▄▆█"
+                    } else if signal > -60 {
+                        "▂▄▆_"
+                    } else if signal > -70 {
+                        "▂▄__"
+                    } else if signal > -80 {
+                        "▂___"
+                    } else {
+                        "____"
+                    };
+
+                    println!("{:3} {:32} {:3} {:4} {:17} {:6} {:8} {:10}",
+                            "", ssid, "Infra", channel, bssid, signal, bars, "*");
+                }
+            }
+        }
+        WifiDeviceCommands::Connect { ssid, password, ifname: _, bssid: _, wep_key_type: _, hidden: _, private: _ } => {
+            let pwd = password.as_deref().unwrap_or("");
+            client.wifi_connect(ssid, pwd).await?;
+
+            if !cli.terse {
+                println!("Successfully connected to '{}'", ssid);
+            }
+        }
+        WifiDeviceCommands::Hotspot { ifname, ssid, password, band: _, channel: _, con_name: _ } => {
+            let iface = ifname.as_deref().unwrap_or("wlan0");
+            let ap_ssid = ssid.as_deref().unwrap_or_else(|| "Hotspot");
+            let pwd = password.as_deref().unwrap_or("");
+
+            client.wifi_start_ap(ap_ssid, pwd, iface).await?;
+
+            if !cli.terse {
+                println!("Hotspot '{}' activated on device '{}'", ap_ssid, iface);
+            }
+        }
+        WifiDeviceCommands::Radio { state } => {
+            let enabled = state == "on";
+            client.wifi_set_enabled(enabled).await?;
+
+            if !cli.terse {
+                println!("WiFi radio {}", if enabled { "enabled" } else { "disabled" });
+            }
+        }
+    }
+
+    Ok(())
+}
+
 async fn handle_device_wifi(cmd: &WifiDeviceCommands, cli: &Cli) -> NetctlResult<()> {
+    // D-Bus mode: use netctld daemon
+    if cli.use_dbus {
+        return handle_device_wifi_dbus(cmd, cli).await;
+    }
+
+    // Direct mode: use library controllers directly
     let wifi_ctrl = wifi::WifiController::new();
     let iface_ctrl = interface::InterfaceController::new();
 

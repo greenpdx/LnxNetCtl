@@ -22,6 +22,10 @@ path = "src/bin/nm-converter.rs"
 name = "nccli"
 path = "src/bin/nccli.rs"
 
+[[bin]]
+name = "netctld"
+path = "src/bin/netctld.rs"
+
 [[example]]
 name = "dbus_test"
 path = "examples/dbus_test.rs"
@@ -34,6 +38,9 @@ futures = "0.3"  # Required for TryStreamExt used by rtnetlink
 
 # CLI
 clap = { version = "4.5", features = ["derive"] }
+
+# System
+libc = "0.2"  # For UID checks and other system calls
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -53,6 +60,7 @@ netlink-packet-route = "0.25"
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+atty = "0.2"  # Terminal detection for colored logging
 
 # Error handling
 thiserror = "2.0"

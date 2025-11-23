@@ -1,0 +1,57 @@
+D-Bus Interface Audit Complete ✅
+
+  I've completed a comprehensive audit of the current D-Bus interfaces
+  against all CLI commands. Here's what I found:
+
+  Audit Summary (docs/DBUS_INTERFACE_AUDIT.md)
+
+  Currently Implemented (Good Coverage):
+  - ✅ Network Control - Core functionality (version, devices, state,
+  connectivity)
+  - ✅ WiFi Management - Scan, connect, AP mode (mostly complete)
+  - ✅ VPN Management - WireGuard, OpenVPN, IPsec, Arti (mostly complete)
+  - ✅ Device Interface - Basic device operations
+
+  Critical Gaps Identified (4 Complete Interfaces Missing):
+  1. ❌ Connection Management - 12 methods needed (show/add/modify/delete
+  connections)
+  2. ❌ DHCP Server - 4 methods needed (start/stop/status/leases)
+  3. ❌ DNS Server - 5 methods needed (start/stop/status/flush/cache)
+  4. ❌ Routing - 5 methods needed (show/add/delete routes)
+
+  Enhancement Needed (Existing Interfaces):
+  - ⚠️ Device: Add SetAutoconnect, SetManaged, Delete, GetLLDPNeighbors
+  - ⚠️ VPN: Add Import/Export, CreateFromConfig, ListBackends
+  - ⚠️ WiFi/AP: Add GetAPStatus, RestartAP, GetAPClients
+  - ⚠️ NetworkControl: Add SetLoggingLevel
+
+  Statistics:
+
+  - Total Missing: ~35 new methods + ~15 new signals
+  - New Interfaces: 4 complete interfaces
+  - Estimated Effort: ~2 weeks for complete coverage
+
+  Implementation Priority:
+
+  Phase 1 (Critical - Week 1):
+  1. ✅ Audit complete
+  2. Connection management interface (blocking daemon/CLI split)
+  3. Device enhancements (SetAutoconnect, SetManaged)
+
+  Phase 2 (Infrastructure - Week 1-2):
+  4. DHCP interface
+  5. DNS interface
+  6. Routing interface
+
+  Phase 3 (Enhancements - Week 2-3):
+  7. VPN import/export
+  8. WiFi/AP enhancements
+  9. Logging control
+
+  The audit document includes detailed method signatures, type definitions,
+  and testing requirements for each missing interface.
+
+  Next Steps: Begin implementing the Connection management interface as it's
+   critical for the daemon/CLI split to work properly.
+
+

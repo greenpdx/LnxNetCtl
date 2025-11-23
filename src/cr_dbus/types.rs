@@ -20,6 +20,21 @@ pub const CR_WIFI_PATH: &str = "/org/crrouter/NetworkControl/WiFi";
 /// CR D-Bus VPN path prefix
 pub const CR_VPN_PATH_PREFIX: &str = "/org/crrouter/NetworkControl/VPN";
 
+/// CR D-Bus Connection path
+pub const CR_CONNECTION_PATH: &str = "/org/crrouter/NetworkControl/Connection";
+
+/// CR D-Bus Connection path prefix
+pub const CR_CONNECTION_PATH_PREFIX: &str = "/org/crrouter/NetworkControl/Connections";
+
+/// CR D-Bus DHCP path
+pub const CR_DHCP_PATH: &str = "/org/crrouter/NetworkControl/DHCP";
+
+/// CR D-Bus DNS path
+pub const CR_DNS_PATH: &str = "/org/crrouter/NetworkControl/DNS";
+
+/// CR D-Bus Routing path
+pub const CR_ROUTING_PATH: &str = "/org/crrouter/NetworkControl/Routing";
+
 /// Network control state
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -290,5 +305,172 @@ impl From<CRNetworkState> for u32 {
 impl From<CRConnectivity> for u32 {
     fn from(c: CRConnectivity) -> u32 {
         c as u32
+    }
+}
+
+/// Connection type enumeration
+#[repr(u32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub enum CRConnectionType {
+    /// Unknown connection type
+    Unknown = 0,
+    /// Ethernet connection
+    Ethernet = 1,
+    /// WiFi connection
+    WiFi = 2,
+    /// VPN connection
+    Vpn = 3,
+    /// Bridge connection
+    Bridge = 4,
+    /// Bond connection
+    Bond = 5,
+    /// VLAN connection
+    Vlan = 6,
+    /// Loopback connection
+    Loopback = 7,
+}
+
+/// Connection state enumeration
+#[repr(u32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub enum CRConnectionState {
+    /// Connection state unknown
+    Unknown = 0,
+    /// Connection is activating
+    Activating = 1,
+    /// Connection is activated
+    Activated = 2,
+    /// Connection is deactivating
+    Deactivating = 3,
+    /// Connection is deactivated
+    Deactivated = 4,
+}
+
+/// Connection information structure
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CRConnectionInfo {
+    /// Connection UUID
+    pub uuid: String,
+    /// Connection ID (name)
+    pub id: String,
+    /// Connection type
+    pub conn_type: CRConnectionType,
+    /// Connection state
+    pub state: CRConnectionState,
+    /// Device path (if active)
+    pub device: Option<String>,
+    /// Object path
+    pub path: String,
+    /// Autoconnect enabled
+    pub autoconnect: bool,
+}
+
+impl CRConnectionInfo {
+    /// Create a new connection info
+    pub fn new(uuid: String, id: String, conn_type: CRConnectionType) -> Self {
+        let path = format!("{}/{}", CR_CONNECTION_PATH_PREFIX, uuid);
+        Self {
+            uuid,
+            id,
+            conn_type,
+            state: CRConnectionState::Deactivated,
+            device: None,
+            path,
+            autoconnect: true,
+        }
+    }
+}
+
+/// Helper function to convert connection type to u32
+impl From<CRConnectionType> for u32 {
+    fn from(ct: CRConnectionType) -> u32 {
+        ct as u32
+    }
+}
+
+/// Helper function to convert connection state to u32
+impl From<CRConnectionState> for u32 {
+    fn from(cs: CRConnectionState) -> u32 {
+        cs as u32
+    }
+}
+
+/// DHCP lease information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CRDhcpLease {
+    /// MAC address of the client
+    pub mac_address: String,
+    /// Assigned IP address
+    pub ip_address: String,
+    /// Client hostname (if provided)
+    pub hostname: Option<String>,
+    /// Lease expiration time (Unix timestamp)
+    pub expiry: u64,
+    /// Lease start time (Unix timestamp)
+    pub start_time: u64,
+}
+
+/// Route type enumeration
+#[repr(u32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub enum CRRouteType {
+    /// Unknown route type
+    Unknown = 0,
+    /// Unicast route
+    Unicast = 1,
+    /// Local route
+    Local = 2,
+    /// Broadcast route
+    Broadcast = 3,
+    /// Anycast route
+    Anycast = 4,
+    /// Multicast route
+    Multicast = 5,
+    /// Blackhole route
+    Blackhole = 6,
+    /// Unreachable route
+    Unreachable = 7,
+    /// Prohibit route
+    Prohibit = 8,
+}
+
+/// Route information structure
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CRRouteInfo {
+    /// Destination network (e.g., "192.168.1.0/24" or "default")
+    pub destination: String,
+    /// Gateway/next hop IP address
+    pub gateway: Option<String>,
+    /// Outgoing interface
+    pub interface: Option<String>,
+    /// Route metric (priority)
+    pub metric: u32,
+    /// Route type
+    pub route_type: CRRouteType,
+    /// Route table ID
+    pub table: u32,
+    /// Route scope
+    pub scope: u32,
+}
+
+impl CRRouteInfo {
+    /// Create a new route info
+    pub fn new(destination: String) -> Self {
+        Self {
+            destination,
+            gateway: None,
+            interface: None,
+            metric: 0,
+            route_type: CRRouteType::Unicast,
+            table: 254, // Main routing table
+            scope: 0,   // Global scope
+        }
+    }
+}
+
+/// Helper function to convert route type to u32
+impl From<CRRouteType> for u32 {
+    fn from(rt: CRRouteType) -> u32 {
+        rt as u32
     }
 }

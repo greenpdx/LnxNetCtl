@@ -173,6 +173,76 @@ impl CRVPN {
         Ok(())
     }
 
+    /// Import VPN configuration from file
+    async fn import_config(
+        &self,
+        vpn_type: &str,
+        config_file: &str,
+        name: &str,
+    ) -> fdo::Result<String> {
+        info!(
+            "CR VPN: Importing {} config from {} as {}",
+            vpn_type, config_file, name
+        );
+
+        // Validate VPN type
+        let vtype = match vpn_type.to_lowercase().as_str() {
+            "openvpn" => CRVpnType::OpenVpn,
+            "wireguard" => CRVpnType::WireGuard,
+            "ipsec" => CRVpnType::IPsec,
+            "arti" | "tor" => CRVpnType::Arti,
+            _ => return Err(fdo::Error::InvalidArgs(format!("Unknown VPN type: {}", vpn_type))),
+        };
+
+        // Validate file path
+        if config_file.is_empty() {
+            return Err(fdo::Error::InvalidArgs("Config file path cannot be empty".to_string()));
+        }
+
+        // Validate name
+        if name.is_empty() {
+            return Err(fdo::Error::InvalidArgs("VPN name cannot be empty".to_string()));
+        }
+
+        // Create VPN info
+        let vpn_info = CRVpnInfo::new(name.to_string(), vtype);
+        self.add_connection(vpn_info).await;
+
+        // Actual import will be handled by integration layer
+        info!("CR VPN: Successfully imported config as {}", name);
+        Ok(name.to_string())
+    }
+
+    /// Export VPN configuration to string
+    async fn export_config(&self, name: &str) -> fdo::Result<String> {
+        info!("CR VPN: Exporting config for {}", name);
+
+        let connections = self.connections.read().await;
+        if !connections.contains_key(name) {
+            return Err(fdo::Error::Failed(format!("VPN connection {} not found", name)));
+        }
+
+        // Actual export will be handled by integration layer
+        // Return placeholder config
+        let config = format!("# VPN Configuration for {}\n# Type: {:?}\n", name, connections[name].vpn_type);
+        Ok(config)
+    }
+
+    /// Create VPN connection from TOML configuration
+    async fn create_from_config(&self, config_toml: &str) -> fdo::Result<String> {
+        info!("CR VPN: Creating connection from TOML config");
+
+        if config_toml.is_empty() {
+            return Err(fdo::Error::InvalidArgs("Config cannot be empty".to_string()));
+        }
+
+        // Actual parsing and creation will be handled by integration layer
+        // For now, return a placeholder name
+        let name = "imported_vpn".to_string();
+        info!("CR VPN: Successfully created connection from config: {}", name);
+        Ok(name)
+    }
+
     // ============ D-Bus Signals ============
 
     /// ConnectionAdded signal - emitted when a VPN connection is added

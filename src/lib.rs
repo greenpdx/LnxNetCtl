@@ -34,6 +34,7 @@ pub mod vpn;
 pub mod network_monitor;
 pub mod libcr_compat;
 pub mod cr_dbus;
+pub mod dbus_client;
 
 #[cfg(feature = "dbus-nm")]
 pub mod dbus;
@@ -99,3 +100,6 @@ pub use cr_dbus::{
     CRAccessPointInfo, CRVpnInfo, CRWiFiSecurity, CRWiFiMode, CRVpnType, CRVpnState,
     CR_DBUS_SERVICE, CR_DBUS_PATH, CR_WIFI_PATH,
 };
+
+// D-Bus client library for communicating with netctld daemon
+pub use dbus_client::NetctlClient;
