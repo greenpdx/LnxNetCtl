@@ -1,0 +1,24 @@
+[Unit]
+Description=netctl Tor Onion Service Daemon
+Documentation=https://github.com/your-org/netctl
+After=network.target netctld.service
+Wants=netctld.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/netctl-tor-server --foreground
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/netctl/tor-server /run/netctl
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target

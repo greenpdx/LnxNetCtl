@@ -1,0 +1,23 @@
+# netctl-tor-server configuration example
+#
+# Copy to /etc/netctl/tor-server.toml
+
+# Data directory for onion service keys and state
+data_dir = "/var/lib/netctl/tor-server"
+
+# Pre-configured onion services
+# These will be loaded on startup but not automatically started
+
+[[services]]
+name = "web"
+local_port = 80
+virtual_port = 80
+version_3 = true
+authorized_clients = []
+
+[[services]]
+name = "ssh"
+local_port = 22
+virtual_port = 22
+version_3 = true
+authorized_clients = []

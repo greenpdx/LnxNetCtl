@@ -26,6 +26,10 @@ path = "src/bin/nccli.rs"
 name = "netctld"
 path = "src/bin/netctld.rs"
 
+[[bin]]
+name = "netctl-tor-server"
+path = "src/bin/netctl-tor-server.rs"
+
 [[example]]
 name = "dbus_test"
 path = "examples/dbus_test.rs"
@@ -130,6 +134,7 @@ assets = [
     ["target/release/netctl", "usr/bin/", "755"],
     ["target/release/nccli", "usr/bin/", "755"],
     ["target/release/netctld", "usr/bin/", "755"],
+    ["target/release/netctl-tor-server", "usr/bin/", "755"],
     ["target/release/nm-converter", "usr/bin/", "755"],
     ["README.md", "usr/share/doc/netctl/", "644"],
     ["INSTALL_SYSTEMD.md", "usr/share/doc/netctl/", "644"],
@@ -137,13 +142,17 @@ assets = [
     ["systemd/netctld.service", "lib/systemd/system/", "644"],
     ["systemd/netctl@.service", "lib/systemd/system/", "644"],
     ["systemd/netctl-auto@.service", "lib/systemd/system/", "644"],
+    ["systemd/netctl-tor-server.service", "lib/systemd/system/", "644"],
     ["systemd/README.md", "usr/share/doc/netctl/systemd/", "644"],
     ["dbus/org.crrouter.NetworkControl.conf", "etc/dbus-1/system.d/", "644"],
     ["dbus/org.crrouter.NetworkControl.service", "usr/share/dbus-1/system-services/", "644"],
+    ["dbus/org.crrouter.NetworkControl.TorServer.conf", "etc/dbus-1/system.d/", "644"],
+    ["dbus/org.crrouter.NetworkControl.TorServer.service", "usr/share/dbus-1/system-services/", "644"],
     ["config/examples/wifi-wpa.nctl", "usr/share/doc/netctl/examples/", "644"],
     ["config/examples/wifi-dhcp.nctl", "usr/share/doc/netctl/examples/", "644"],
     ["config/examples/ethernet-dhcp.nctl", "usr/share/doc/netctl/examples/", "644"],
     ["config/examples/ethernet-static.nctl", "usr/share/doc/netctl/examples/", "644"],
     ["config/examples/vpn-openvpn.nctl", "usr/share/doc/netctl/examples/", "644"],
     ["config/examples/vpn-arti.nctl", "usr/share/doc/netctl/examples/", "644"],
+    ["config/examples/tor-server.toml", "usr/share/doc/netctl/examples/", "644"],
 ]

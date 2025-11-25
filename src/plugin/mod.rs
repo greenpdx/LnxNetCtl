@@ -23,6 +23,9 @@ pub mod tuntap;
 pub mod vlan;
 pub mod bridge;
 
+#[cfg(feature = "vpn-tor")]
+pub mod tor;
+
 pub use traits::{NetworkPlugin, PluginCapability, PluginMetadata, PluginState, ConnectionConfig, ConnectionStats};
 pub use manager::PluginManager;
 pub use config::{PluginConfig, PluginConfigManager};

@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=org.crrouter.NetworkControl.TorServer
+Exec=/usr/bin/netctl-tor-server --foreground
+User=root
+SystemdService=netctl-tor-server.service
