@@ -309,6 +309,10 @@ enum Commands {
     #[command(subcommand)]
     Debug(DebugCommands),
 
+    /// D-Bus interface commands (query netctld and other services)
+    #[command(subcommand)]
+    Dbus(DbusCommands),
+
     /// Run as a daemon with D-Bus services
     Daemon {
         /// Enable NetworkManager compatibility D-Bus interface
@@ -878,6 +882,95 @@ enum DebugCommands {
     },
 }
 
+// ============================================================================
+// D-BUS COMMANDS
+// ============================================================================
+#[derive(Subcommand)]
+enum DbusCommands {
+    /// Call a D-Bus method on netctld
+    Call {
+        /// Interface path (e.g., NetworkControl, WiFi, VPN, Privilege)
+        interface: String,
+        /// Method name
+        method: String,
+        /// Method arguments as JSON array (optional)
+        #[arg(short, long)]
+        args: Option<String>,
+    },
+    /// Get D-Bus property
+    Get {
+        /// Interface path
+        interface: String,
+        /// Property name
+        property: String,
+    },
+    /// List available D-Bus interfaces
+    List,
+    /// Introspect a D-Bus interface
+    Introspect {
+        /// Interface path (e.g., NetworkControl, WiFi, Privilege)
+        #[arg(default_value = "NetworkControl")]
+        interface: String,
+    },
+    /// Monitor D-Bus signals
+    Monitor {
+        /// Interface to monitor (optional, all if not specified)
+        #[arg(short, long)]
+        interface: Option<String>,
+    },
+    /// Query privilege token status via D-Bus
+    PrivilegeStatus,
+    /// Query netctld status via D-Bus
+    Status,
+    /// List devices via D-Bus
+    Devices,
+    /// Tor server commands (via netctl-tor-server D-Bus)
+    #[command(subcommand)]
+    TorServer(TorServerCommands),
+}
+
+#[derive(Subcommand)]
+enum TorServerCommands {
+    /// List onion services
+    List,
+    /// Create an onion service
+    Create {
+        /// Service name
+        name: String,
+        /// Local port to forward to
+        #[arg(short, long)]
+        local_port: u16,
+        /// Virtual port (port seen by Tor clients)
+        #[arg(short, long)]
+        virtual_port: u16,
+    },
+    /// Start an onion service
+    Start {
+        /// Service name
+        name: String,
+    },
+    /// Stop an onion service
+    Stop {
+        /// Service name
+        name: String,
+    },
+    /// Remove an onion service
+    Remove {
+        /// Service name
+        name: String,
+    },
+    /// Get onion service status
+    Status {
+        /// Service name
+        name: String,
+    },
+    /// Get onion address for a service
+    Address {
+        /// Service name
+        name: String,
+    },
+}
+
 /// Determine if a command requires root privileges
 /// Returns Some(PrivilegedOp) if privileged, None if read-only
 fn get_required_privilege(command: &Commands) -> Option<PrivilegedOp> {
@@ -1002,6 +1095,9 @@ fn get_required_privilege(command: &Commands) -> Option<PrivilegedOp> {
 
         // Debug commands - read-only
         Commands::Debug(_) => None,
+
+        // D-Bus commands - read-only (queries via D-Bus)
+        Commands::Dbus(_) => None,
 
         // Daemon - requires root to start
         Commands::Daemon { .. } => Some(PrivilegedOp::ApStart), // reuse - daemon needs root
@@ -1170,6 +1266,7 @@ async fn main() {
         Commands::Dns(cmd) => handle_dns(cmd, &cli).await,
         Commands::Route(cmd) => handle_route(cmd, &cli).await,
         Commands::Debug(cmd) => handle_debug(cmd, &cli).await,
+        Commands::Dbus(cmd) => handle_dbus(cmd, &cli).await,
         Commands::Daemon { nm_compat, cr_dbus } => handle_daemon(*nm_compat, *cr_dbus).await,
     };
 
@@ -2891,6 +2988,540 @@ async fn handle_debug(cmd: &DebugCommands, cli: &Cli) -> NetctlResult<()> {
             }
         }
     }
+    Ok(())
+}
+
+// ============================================================================
+// D-BUS COMMAND HANDLER
+// ============================================================================
+
+const CR_DBUS_SERVICE: &str = "org.crrouter.NetworkControl";
+const CR_DBUS_PATH: &str = "/org/crrouter/NetworkControl";
+const TOR_SERVER_SERVICE: &str = "org.crrouter.NetworkControl.TorServer";
+const TOR_SERVER_PATH: &str = "/org/crrouter/NetworkControl/TorServer";
+
+async fn handle_dbus(cmd: &DbusCommands, cli: &Cli) -> NetctlResult<()> {
+    use zbus::Connection;
+
+    match cmd {
+        DbusCommands::Call { interface, method, args: _ } => {
+            let conn = Connection::system().await
+                .map_err(|e| NetctlError::ServiceError(format!("Failed to connect to D-Bus: {}", e)))?;
+
+            let path = match interface.as_str() {
+                "NetworkControl" | "" => CR_DBUS_PATH,
+                "WiFi" => "/org/crrouter/NetworkControl/WiFi",
+                "VPN" => "/org/crrouter/NetworkControl/VPN",
+                "DHCP" => "/org/crrouter/NetworkControl/DHCP",
+                "DNS" => "/org/crrouter/NetworkControl/DNS",
+                "Routing" => "/org/crrouter/NetworkControl/Routing",
+                "Privilege" => "/org/crrouter/NetworkControl/Privilege",
+                "Connection" => "/org/crrouter/NetworkControl/Connection",
+                other => {
+                    // Allow full path specification
+                    if other.starts_with("/") {
+                        other
+                    } else {
+                        return Err(NetctlError::InvalidParameter(format!(
+                            "Unknown interface: {}. Use: NetworkControl, WiFi, VPN, DHCP, DNS, Routing, Privilege, Connection",
+                            other
+                        )));
+                    }
+                }
+            };
+
+            let interface_name = format!("org.crrouter.NetworkControl.{}",
+                if interface.is_empty() { "NetworkControl" } else { interface });
+
+            if !cli.terse {
+                println!("Calling {}.{} on {}", interface_name, method, path);
+            }
+
+            // Use introspection-based method call
+            let proxy = conn.call_method(
+                Some(CR_DBUS_SERVICE),
+                path,
+                Some(interface_name.as_str()),
+                method.as_str(),
+                &(),
+            ).await;
+
+            match proxy {
+                Ok(reply) => {
+                    // Try to extract the body as different types
+                    if let Ok(s) = reply.body().deserialize::<String>() {
+                        println!("{}", s);
+                    } else if let Ok(b) = reply.body().deserialize::<bool>() {
+                        println!("{}", b);
+                    } else if let Ok(i) = reply.body().deserialize::<i32>() {
+                        println!("{}", i);
+                    } else if let Ok(arr) = reply.body().deserialize::<Vec<String>>() {
+                        for item in arr {
+                            println!("{}", item);
+                        }
+                    } else if let Ok(()) = reply.body().deserialize::<()>() {
+                        if !cli.terse {
+                            println!("Method call successful (no return value)");
+                        }
+                    } else {
+                        println!("Response: {:?}", reply.body());
+                    }
+                }
+                Err(e) => {
+                    return Err(NetctlError::ServiceError(format!("D-Bus call failed: {}", e)));
+                }
+            }
+        }
+
+        DbusCommands::Get { interface, property } => {
+            let conn = Connection::system().await
+                .map_err(|e| NetctlError::ServiceError(format!("Failed to connect to D-Bus: {}", e)))?;
+
+            let path = match interface.as_str() {
+                "NetworkControl" | "" => CR_DBUS_PATH,
+                "WiFi" => "/org/crrouter/NetworkControl/WiFi",
+                "VPN" => "/org/crrouter/NetworkControl/VPN",
+                "Privilege" => "/org/crrouter/NetworkControl/Privilege",
+                other => {
+                    return Err(NetctlError::InvalidParameter(format!("Unknown interface: {}", other)));
+                }
+            };
+
+            let interface_name = format!("org.crrouter.NetworkControl.{}",
+                if interface.is_empty() { "NetworkControl" } else { interface });
+
+            if !cli.terse {
+                println!("Getting {}.{} from {}", interface_name, property, path);
+            }
+
+            let reply = conn.call_method(
+                Some(CR_DBUS_SERVICE),
+                path,
+                Some("org.freedesktop.DBus.Properties"),
+                "Get",
+                &(&interface_name, property),
+            ).await
+                .map_err(|e| NetctlError::ServiceError(format!("Failed to get property: {}", e)))?;
+
+            // Properties are returned as variants
+            if let Ok(v) = reply.body().deserialize::<zvariant::OwnedValue>() {
+                println!("{}: {:?}", property, v);
+            } else {
+                println!("Response: {:?}", reply.body());
+            }
+        }
+
+        DbusCommands::List => {
+            println!("Available D-Bus interfaces:");
+            println!();
+            println!("  netctld (org.crrouter.NetworkControl):");
+            println!("    NetworkControl  - Main network control interface");
+            println!("    WiFi            - WiFi management");
+            println!("    VPN             - VPN management");
+            println!("    DHCP            - DHCP server/client");
+            println!("    DNS             - DNS configuration");
+            println!("    Routing         - Routing table management");
+            println!("    Privilege       - Privilege token management");
+            println!("    Connection      - Connection profiles");
+            println!();
+            println!("  netctl-tor-server (org.crrouter.NetworkControl.TorServer):");
+            println!("    TorServer       - Tor onion service management");
+            println!();
+            println!("Use 'nccli dbus introspect <interface>' for details");
+        }
+
+        DbusCommands::Introspect { interface } => {
+            let conn = Connection::system().await
+                .map_err(|e| NetctlError::ServiceError(format!("Failed to connect to D-Bus: {}", e)))?;
+
+            let (service, path) = match interface.as_str() {
+                "TorServer" => (TOR_SERVER_SERVICE, TOR_SERVER_PATH),
+                "NetworkControl" | "" => (CR_DBUS_SERVICE, CR_DBUS_PATH),
+                "WiFi" => (CR_DBUS_SERVICE, "/org/crrouter/NetworkControl/WiFi"),
+                "VPN" => (CR_DBUS_SERVICE, "/org/crrouter/NetworkControl/VPN"),
+                "DHCP" => (CR_DBUS_SERVICE, "/org/crrouter/NetworkControl/DHCP"),
+                "DNS" => (CR_DBUS_SERVICE, "/org/crrouter/NetworkControl/DNS"),
+                "Routing" => (CR_DBUS_SERVICE, "/org/crrouter/NetworkControl/Routing"),
+                "Privilege" => (CR_DBUS_SERVICE, "/org/crrouter/NetworkControl/Privilege"),
+                "Connection" => (CR_DBUS_SERVICE, "/org/crrouter/NetworkControl/Connection"),
+                other => {
+                    return Err(NetctlError::InvalidParameter(format!("Unknown interface: {}", other)));
+                }
+            };
+
+            let reply = conn.call_method(
+                Some(service),
+                path,
+                Some("org.freedesktop.DBus.Introspectable"),
+                "Introspect",
+                &(),
+            ).await
+                .map_err(|e| NetctlError::ServiceError(format!("Failed to introspect: {}", e)))?;
+
+            let xml: String = reply.body().deserialize()
+                .map_err(|e| NetctlError::ServiceError(format!("Failed to parse introspection: {}", e)))?;
+
+            println!("{}", xml);
+        }
+
+        DbusCommands::Monitor { interface } => {
+            let conn = Connection::system().await
+                .map_err(|e| NetctlError::ServiceError(format!("Failed to connect to D-Bus: {}", e)))?;
+
+            let match_rule = if let Some(iface) = interface {
+                format!("type='signal',sender='{}',interface='org.crrouter.NetworkControl.{}'",
+                    CR_DBUS_SERVICE, iface)
+            } else {
+                format!("type='signal',sender='{}'", CR_DBUS_SERVICE)
+            };
+
+            println!("Monitoring D-Bus signals (Ctrl+C to stop)...");
+            println!("Match rule: {}", match_rule);
+            println!();
+
+            // Add match rule
+            conn.call_method(
+                Some("org.freedesktop.DBus"),
+                "/org/freedesktop/DBus",
+                Some("org.freedesktop.DBus"),
+                "AddMatch",
+                &(&match_rule,),
+            ).await
+                .map_err(|e| NetctlError::ServiceError(format!("Failed to add match rule: {}", e)))?;
+
+            // Monitor signals - simplified version
+            println!("Signal monitoring active. This is a basic implementation.");
+            println!("For full monitoring, use: dbus-monitor \"{}\"", match_rule);
+
+            // Keep running until interrupted
+            tokio::signal::ctrl_c().await
+                .map_err(|e| NetctlError::ServiceError(format!("Signal error: {}", e)))?;
+
+            println!("\nMonitoring stopped.");
+        }
+
+        DbusCommands::PrivilegeStatus => {
+            let conn = Connection::system().await
+                .map_err(|e| NetctlError::ServiceError(format!("Failed to connect to D-Bus: {}", e)))?;
+
+            let reply = conn.call_method(
+                Some(CR_DBUS_SERVICE),
+                "/org/crrouter/NetworkControl/Privilege",
+                Some("org.crrouter.NetworkControl.Privilege"),
+                "GetStatus",
+                &(),
+            ).await;
+
+            match reply {
+                Ok(r) => {
+                    if let Ok((valid, remaining)) = r.body().deserialize::<(bool, u64)>() {
+                        if valid {
+                            println!("Privilege token: valid ({} seconds remaining)", remaining);
+                        } else {
+                            println!("Privilege token: invalid or expired");
+                        }
+                    } else {
+                        println!("Response: {:?}", r.body());
+                    }
+                }
+                Err(e) => {
+                    // Service might not be running
+                    println!("Cannot query privilege status: {}", e);
+                    println!("(netctld may not be running)");
+                }
+            }
+        }
+
+        DbusCommands::Status => {
+            let conn = Connection::system().await
+                .map_err(|e| NetctlError::ServiceError(format!("Failed to connect to D-Bus: {}", e)))?;
+
+            // Try to ping the service
+            let reply = conn.call_method(
+                Some(CR_DBUS_SERVICE),
+                CR_DBUS_PATH,
+                Some("org.freedesktop.DBus.Peer"),
+                "Ping",
+                &(),
+            ).await;
+
+            match reply {
+                Ok(_) => {
+                    println!("netctld status: running");
+
+                    // Try to get version
+                    let version_reply = conn.call_method(
+                        Some(CR_DBUS_SERVICE),
+                        CR_DBUS_PATH,
+                        Some("org.crrouter.NetworkControl"),
+                        "GetVersion",
+                        &(),
+                    ).await;
+
+                    if let Ok(r) = version_reply {
+                        if let Ok(version) = r.body().deserialize::<String>() {
+                            println!("  version: {}", version);
+                        }
+                    }
+                }
+                Err(_) => {
+                    println!("netctld status: not running");
+                }
+            }
+
+            // Check Tor server
+            let tor_reply = conn.call_method(
+                Some(TOR_SERVER_SERVICE),
+                TOR_SERVER_PATH,
+                Some("org.freedesktop.DBus.Peer"),
+                "Ping",
+                &(),
+            ).await;
+
+            match tor_reply {
+                Ok(_) => println!("netctl-tor-server status: running"),
+                Err(_) => println!("netctl-tor-server status: not running"),
+            }
+        }
+
+        DbusCommands::Devices => {
+            let conn = Connection::system().await
+                .map_err(|e| NetctlError::ServiceError(format!("Failed to connect to D-Bus: {}", e)))?;
+
+            let reply = conn.call_method(
+                Some(CR_DBUS_SERVICE),
+                CR_DBUS_PATH,
+                Some("org.crrouter.NetworkControl"),
+                "GetDevices",
+                &(),
+            ).await;
+
+            match reply {
+                Ok(r) => {
+                    if let Ok(devices) = r.body().deserialize::<Vec<String>>() {
+                        if cli.terse {
+                            for dev in devices {
+                                println!("{}", dev);
+                            }
+                        } else {
+                            println!("Devices:");
+                            for dev in devices {
+                                println!("  {}", dev);
+                            }
+                        }
+                    } else if let Ok(devices) = r.body().deserialize::<Vec<(String, String, u32)>>() {
+                        // name, type, state
+                        if cli.terse {
+                            for (name, dtype, state) in devices {
+                                println!("{}\t{}\t{}", name, dtype, state);
+                            }
+                        } else {
+                            println!("{:<15} {:<12} {}", "DEVICE", "TYPE", "STATE");
+                            for (name, dtype, state) in devices {
+                                println!("{:<15} {:<12} {}", name, dtype, state);
+                            }
+                        }
+                    } else {
+                        println!("Response: {:?}", r.body());
+                    }
+                }
+                Err(e) => {
+                    return Err(NetctlError::ServiceError(format!(
+                        "Failed to list devices: {} (is netctld running?)", e
+                    )));
+                }
+            }
+        }
+
+        DbusCommands::TorServer(tor_cmd) => {
+            handle_tor_server_dbus(tor_cmd, cli).await?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn handle_tor_server_dbus(cmd: &TorServerCommands, cli: &Cli) -> NetctlResult<()> {
+    use zbus::Connection;
+
+    let conn = Connection::system().await
+        .map_err(|e| NetctlError::ServiceError(format!("Failed to connect to D-Bus: {}", e)))?;
+
+    match cmd {
+        TorServerCommands::List => {
+            let reply = conn.call_method(
+                Some(TOR_SERVER_SERVICE),
+                TOR_SERVER_PATH,
+                Some("org.crrouter.NetworkControl.TorServer"),
+                "ListServices",
+                &(),
+            ).await;
+
+            match reply {
+                Ok(r) => {
+                    if let Ok(services) = r.body().deserialize::<Vec<(String, bool, String)>>() {
+                        // name, running, address
+                        if cli.terse {
+                            for (name, running, addr) in services {
+                                println!("{}\t{}\t{}", name, if running { "running" } else { "stopped" }, addr);
+                            }
+                        } else {
+                            println!("{:<20} {:<10} {}", "SERVICE", "STATUS", "ADDRESS");
+                            for (name, running, addr) in services {
+                                println!("{:<20} {:<10} {}",
+                                    name,
+                                    if running { "running" } else { "stopped" },
+                                    if addr.is_empty() { "-" } else { &addr }
+                                );
+                            }
+                        }
+                    } else if let Ok(services) = r.body().deserialize::<Vec<String>>() {
+                        for name in services {
+                            println!("{}", name);
+                        }
+                    } else {
+                        println!("Response: {:?}", r.body());
+                    }
+                }
+                Err(e) => {
+                    return Err(NetctlError::ServiceError(format!(
+                        "Failed to list services: {} (is netctl-tor-server running?)", e
+                    )));
+                }
+            }
+        }
+
+        TorServerCommands::Create { name, local_port, virtual_port } => {
+            if !cli.terse {
+                println!("Creating onion service '{}' ({}:{})...", name, local_port, virtual_port);
+            }
+
+            let reply = conn.call_method(
+                Some(TOR_SERVER_SERVICE),
+                TOR_SERVER_PATH,
+                Some("org.crrouter.NetworkControl.TorServer"),
+                "CreateService",
+                &(name.as_str(), *local_port, *virtual_port),
+            ).await
+                .map_err(|e| NetctlError::ServiceError(format!("Failed to create service: {}", e)))?;
+
+            if let Ok(success) = reply.body().deserialize::<bool>() {
+                if success {
+                    println!("Service '{}' created successfully", name);
+                } else {
+                    return Err(NetctlError::ServiceError("Failed to create service".into()));
+                }
+            }
+        }
+
+        TorServerCommands::Start { name } => {
+            if !cli.terse {
+                println!("Starting onion service '{}'...", name);
+            }
+
+            let reply = conn.call_method(
+                Some(TOR_SERVER_SERVICE),
+                TOR_SERVER_PATH,
+                Some("org.crrouter.NetworkControl.TorServer"),
+                "StartService",
+                &(name.as_str(),),
+            ).await
+                .map_err(|e| NetctlError::ServiceError(format!("Failed to start service: {}", e)))?;
+
+            if let Ok(addr) = reply.body().deserialize::<String>() {
+                println!("Service '{}' started", name);
+                if !addr.is_empty() {
+                    println!("Address: {}", addr);
+                }
+            }
+        }
+
+        TorServerCommands::Stop { name } => {
+            if !cli.terse {
+                println!("Stopping onion service '{}'...", name);
+            }
+
+            conn.call_method(
+                Some(TOR_SERVER_SERVICE),
+                TOR_SERVER_PATH,
+                Some("org.crrouter.NetworkControl.TorServer"),
+                "StopService",
+                &(name.as_str(),),
+            ).await
+                .map_err(|e| NetctlError::ServiceError(format!("Failed to stop service: {}", e)))?;
+
+            println!("Service '{}' stopped", name);
+        }
+
+        TorServerCommands::Remove { name } => {
+            if !cli.terse {
+                println!("Removing onion service '{}'...", name);
+            }
+
+            conn.call_method(
+                Some(TOR_SERVER_SERVICE),
+                TOR_SERVER_PATH,
+                Some("org.crrouter.NetworkControl.TorServer"),
+                "RemoveService",
+                &(name.as_str(),),
+            ).await
+                .map_err(|e| NetctlError::ServiceError(format!("Failed to remove service: {}", e)))?;
+
+            println!("Service '{}' removed", name);
+        }
+
+        TorServerCommands::Status { name } => {
+            let reply = conn.call_method(
+                Some(TOR_SERVER_SERVICE),
+                TOR_SERVER_PATH,
+                Some("org.crrouter.NetworkControl.TorServer"),
+                "GetServiceStatus",
+                &(name.as_str(),),
+            ).await
+                .map_err(|e| NetctlError::ServiceError(format!("Failed to get status: {}", e)))?;
+
+            if let Ok((running, addr, local_port, virtual_port)) =
+                reply.body().deserialize::<(bool, String, u16, u16)>()
+            {
+                if cli.terse {
+                    println!("{}\t{}\t{}\t{}:{}",
+                        name,
+                        if running { "running" } else { "stopped" },
+                        addr,
+                        local_port,
+                        virtual_port
+                    );
+                } else {
+                    println!("Service: {}", name);
+                    println!("  Status: {}", if running { "running" } else { "stopped" });
+                    println!("  Address: {}", if addr.is_empty() { "(not available)" } else { &addr });
+                    println!("  Ports: {} -> {}", virtual_port, local_port);
+                }
+            } else {
+                println!("Response: {:?}", reply.body());
+            }
+        }
+
+        TorServerCommands::Address { name } => {
+            let reply = conn.call_method(
+                Some(TOR_SERVER_SERVICE),
+                TOR_SERVER_PATH,
+                Some("org.crrouter.NetworkControl.TorServer"),
+                "GetOnionAddress",
+                &(name.as_str(),),
+            ).await
+                .map_err(|e| NetctlError::ServiceError(format!("Failed to get address: {}", e)))?;
+
+            if let Ok(addr) = reply.body().deserialize::<String>() {
+                if addr.is_empty() {
+                    println!("(not available - service may not be running)");
+                } else {
+                    println!("{}", addr);
+                }
+            }
+        }
+    }
+
     Ok(())
 }
 
