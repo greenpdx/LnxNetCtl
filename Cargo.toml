@@ -94,10 +94,10 @@ assert_cmd = "2"
 predicates = "3"
 
 [features]
-default = ["dbus-nm", "plugins", "vpn-tor"]
+default = ["dbus-nm", "plugins"]
 dbus-nm = []  # NetworkManager D-Bus compatibility
 plugins = ["dep:libloading"]  # Dynamic plugin loading
-vpn-tor = ["dep:arti-client", "dep:tor-rtcompat"]  # Tor VPN support via Arti
+vpn-tor = ["dep:arti-client", "dep:tor-rtcompat"]  # Tor VPN support via Arti (for netctld plugin)
 dhcp-testing = ["dep:dhcpm"]  # DHCP testing (incomplete implementation)
 full = ["plugins", "vpn-tor", "dhcp-testing"]  # All optional features
 
