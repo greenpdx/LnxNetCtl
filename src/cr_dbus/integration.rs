@@ -14,6 +14,7 @@ use super::privilege::CRPrivilege;
 use super::types::*;
 use crate::error::{NetctlError, NetctlResult};
 use crate::device::{DeviceController, Device};
+use crate::wpa_supplicant::{WpaSupplicantController, WpaSecurityType};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{info, warn, error};
@@ -44,6 +45,10 @@ pub struct CRDbusService {
     privilege: Arc<CRPrivilege>,
     /// Running state
     running: Arc<RwLock<bool>>,
+    /// WPA Supplicant controller for WiFi operations
+    wpa_supplicant: Arc<WpaSupplicantController>,
+    /// Primary WiFi interface name (e.g., wlan0)
+    wifi_interface: Arc<RwLock<Option<String>>>,
 }
 
 impl CRDbusService {
@@ -151,12 +156,13 @@ impl CRDbusService {
         let privilege = Arc::new(privilege);
 
         // Request well-known name
+        info!("Requesting D-Bus name: {}", CR_DBUS_SERVICE);
         match connection.request_name(CR_DBUS_SERVICE).await {
             Ok(_) => {
-                info!("Successfully registered D-Bus service: {}", CR_DBUS_SERVICE);
+                info!("✓ Successfully registered D-Bus service: {}", CR_DBUS_SERVICE);
             }
             Err(e) => {
-                warn!("Failed to request D-Bus name: {}. Service may already be running.", e);
+                error!("✗ Failed to request D-Bus name '{}': {}", CR_DBUS_SERVICE, e);
                 // Don't fail - we can still operate without owning the name
             }
         }
@@ -172,6 +178,8 @@ impl CRDbusService {
             routing,
             privilege,
             running: Arc::new(RwLock::new(true)),
+            wpa_supplicant: Arc::new(WpaSupplicantController::new()),
+            wifi_interface: Arc::new(RwLock::new(None)),
         });
 
         info!("CR D-Bus service started successfully");
@@ -429,5 +437,200 @@ impl CRDbusService {
         }
 
         Ok(())
+    }
+
+    // ============ WiFi Operations ============
+
+    /// Get or detect the primary WiFi interface
+    pub async fn get_wifi_interface(&self) -> NetctlResult<String> {
+        // Check if we already have a cached interface
+        {
+            let iface = self.wifi_interface.read().await;
+            if let Some(ref name) = *iface {
+                return Ok(name.clone());
+            }
+        }
+
+        // Try to detect a WiFi interface
+        let device_controller = DeviceController::new();
+        let devices = device_controller.list_devices().await?;
+
+        for device in devices {
+            if device.name.starts_with("wl") || device.name.starts_with("wlan") {
+                let mut iface = self.wifi_interface.write().await;
+                *iface = Some(device.name.clone());
+                info!("Detected WiFi interface: {}", device.name);
+                return Ok(device.name);
+            }
+        }
+
+        Err(NetctlError::NotFound("No WiFi interface found".to_string()))
+    }
+
+    /// Set the WiFi interface to use
+    pub async fn set_wifi_interface(&self, interface: String) {
+        let mut iface = self.wifi_interface.write().await;
+        *iface = Some(interface.clone());
+        info!("WiFi interface set to: {}", interface);
+    }
+
+    /// Scan for WiFi networks
+    pub async fn wifi_scan(&self) -> NetctlResult<()> {
+        let interface = self.get_wifi_interface().await?;
+
+        info!("Starting WiFi scan on {}", interface);
+        self.wifi.set_scanning(true).await;
+
+        // Trigger scan
+        self.wpa_supplicant.scan(&interface).await?;
+
+        // Wait a bit for scan to complete
+        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+
+        // Get scan results
+        let scan_results = self.wpa_supplicant.scan_results(&interface).await?;
+
+        // Convert to CRAccessPointInfo
+        let mut access_points = Vec::new();
+        for result in scan_results {
+            let security = match result.security_type() {
+                WpaSecurityType::None => CRWiFiSecurity::None,
+                WpaSecurityType::Wep => CRWiFiSecurity::Wep,
+                WpaSecurityType::WpaPsk => CRWiFiSecurity::Wpa,
+                WpaSecurityType::Wpa2Psk => CRWiFiSecurity::Wpa2,
+                WpaSecurityType::Wpa3Sae => CRWiFiSecurity::Wpa3,
+                WpaSecurityType::WpaEap | WpaSecurityType::Wpa2Eap => CRWiFiSecurity::Enterprise,
+            };
+
+            access_points.push(CRAccessPointInfo {
+                ssid: result.ssid.clone(),
+                bssid: result.bssid.clone(),
+                strength: result.signal_percent(),
+                security,
+                frequency: result.frequency,
+                mode: CRWiFiMode::Infrastructure,
+            });
+        }
+
+        info!("WiFi scan found {} access points", access_points.len());
+
+        // Update the WiFi interface with results
+        self.wifi.update_access_points(access_points).await;
+        self.wifi.set_scanning(false).await;
+
+        // Emit scan completed signal
+        if let Err(e) = super::wifi::signals::emit_scan_completed(&self.connection).await {
+            warn!("Failed to emit ScanCompleted signal: {}", e);
+        }
+
+        Ok(())
+    }
+
+    /// Connect to a WiFi network
+    pub async fn wifi_connect(&self, ssid: &str, password: Option<&str>) -> NetctlResult<()> {
+        let interface = self.get_wifi_interface().await?;
+
+        info!("Connecting to WiFi network '{}' on {}", ssid, interface);
+
+        // Connect using wpa_supplicant
+        self.wpa_supplicant.connect(&interface, ssid, password).await?;
+
+        // Update current SSID
+        self.wifi.set_current_ssid(Some(ssid.to_string())).await;
+
+        // Update device state
+        if let Err(e) = self.update_device_state(&interface, CRDeviceState::Activated).await {
+            warn!("Failed to update device state: {}", e);
+        }
+
+        // Emit connected signal
+        if let Err(e) = super::wifi::signals::emit_connected(&self.connection, ssid).await {
+            warn!("Failed to emit Connected signal: {}", e);
+        }
+
+        Ok(())
+    }
+
+    /// Disconnect from WiFi network
+    pub async fn wifi_disconnect(&self) -> NetctlResult<()> {
+        let interface = self.get_wifi_interface().await?;
+
+        info!("Disconnecting WiFi on {}", interface);
+
+        // Disconnect using wpa_supplicant
+        self.wpa_supplicant.disconnect(&interface).await?;
+
+        // Clear current SSID
+        self.wifi.set_current_ssid(None).await;
+
+        // Update device state
+        if let Err(e) = self.update_device_state(&interface, CRDeviceState::Disconnected).await {
+            warn!("Failed to update device state: {}", e);
+        }
+
+        // Emit disconnected signal
+        if let Err(e) = super::wifi::signals::emit_disconnected(&self.connection).await {
+            warn!("Failed to emit Disconnected signal: {}", e);
+        }
+
+        Ok(())
+    }
+
+    /// Get WiFi connection status
+    pub async fn wifi_status(&self) -> NetctlResult<Option<String>> {
+        let interface = match self.get_wifi_interface().await {
+            Ok(iface) => iface,
+            Err(_) => return Ok(None),
+        };
+
+        if !self.wpa_supplicant.is_running(&interface).await {
+            return Ok(None);
+        }
+
+        match self.wpa_supplicant.status(&interface).await {
+            Ok(status) => {
+                if status.state == crate::wpa_supplicant::WpaState::Completed {
+                    Ok(status.ssid)
+                } else {
+                    Ok(None)
+                }
+            }
+            Err(_) => Ok(None),
+        }
+    }
+
+    /// Get WiFi signal strength
+    pub async fn wifi_signal_strength(&self) -> NetctlResult<i32> {
+        let interface = self.get_wifi_interface().await?;
+        self.wpa_supplicant.signal_poll(&interface).await
+    }
+
+    /// Check if wpa_supplicant is available
+    pub async fn is_wpa_supplicant_available(&self) -> bool {
+        self.wpa_supplicant.is_installed().await
+    }
+
+    /// Start wpa_supplicant on WiFi interface
+    pub async fn start_wpa_supplicant(&self) -> NetctlResult<()> {
+        let interface = self.get_wifi_interface().await?;
+        self.wpa_supplicant.start(&interface).await
+    }
+
+    /// Stop wpa_supplicant on WiFi interface
+    pub async fn stop_wpa_supplicant(&self) -> NetctlResult<()> {
+        let interface = self.get_wifi_interface().await?;
+        self.wpa_supplicant.stop(&interface).await
+    }
+
+    /// List saved WiFi networks
+    pub async fn wifi_list_networks(&self) -> NetctlResult<Vec<(String, String, String)>> {
+        let interface = self.get_wifi_interface().await?;
+        self.wpa_supplicant.list_networks(&interface).await
+    }
+
+    /// Remove a saved WiFi network
+    pub async fn wifi_remove_network(&self, network_id: &str) -> NetctlResult<()> {
+        let interface = self.get_wifi_interface().await?;
+        self.wpa_supplicant.remove_network(&interface, network_id).await
     }
 }

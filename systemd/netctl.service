@@ -6,9 +6,8 @@ Before=network.target
 Wants=network.target
 
 [Service]
-Type=dbus
-BusName=org.freedesktop.NetworkManager
-ExecStart=/usr/bin/netctl daemon
+Type=simple
+ExecStart=/usr/local/bin/netctld --foreground
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal
@@ -19,6 +18,10 @@ NoNewPrivileges=false
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
+RuntimeDirectory=netctl
+StateDirectory=netctl
+ConfigurationDirectory=netctl
+
 ReadWritePaths=/etc/netctl /run/netctl /var/lib/netctl
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_SYS_MODULE
 AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE

@@ -19,6 +19,7 @@
 
 use clap::Parser;
 use libnetctl::cr_dbus::CRDbusService;
+use libnetctl::dbus::start_dbus_service as start_nm_dbus_service;
 use libnetctl::error::{NetctlError, NetctlResult};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -121,6 +122,20 @@ async fn main() -> NetctlResult<()> {
         }
     };
 
+    // Start the NetworkManager compatibility D-Bus service
+    info!("Initializing NetworkManager compatibility D-Bus service...");
+    let _nm_service = match start_nm_dbus_service().await {
+        Ok((nm_dbus, nm_conn)) => {
+            info!("✓ NetworkManager D-Bus compatibility service started");
+            Some((nm_dbus, nm_conn))
+        }
+        Err(e) => {
+            warn!("⚠️  Failed to start NM compatibility service: {}", e);
+            warn!("   Applications expecting org.freedesktop.NetworkManager may not work");
+            None
+        }
+    };
+
     // Discover network devices unless disabled
     if !args.no_discovery {
         info!("Discovering network devices...");
@@ -139,7 +154,9 @@ async fn main() -> NetctlResult<()> {
 
     info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     info!("  Network Control Daemon is ready");
-    info!("  D-Bus Service: org.crrouter.NetworkControl");
+    info!("  D-Bus Services:");
+    info!("    • org.crrouter.NetworkControl");
+    info!("    • org.freedesktop.NetworkManager (compatibility)");
     info!("  Interfaces available:");
     info!("    • Network Control   (/org/crrouter/NetworkControl)");
     info!("    • WiFi             (/org/crrouter/NetworkControl/WiFi)");
@@ -177,7 +194,7 @@ fn init_logging(args: &Args) {
 
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| {
-            EnvFilter::new(format!("netctl={},netctld={}", log_level, log_level))
+            EnvFilter::new(format!("netctl={},netctld={},libnetctl={}", log_level, log_level, log_level))
         });
 
     fmt()
