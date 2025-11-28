@@ -6,7 +6,8 @@ Before=network.target
 Wants=network.target
 
 [Service]
-Type=simple
+Type=dbus
+BusName=org.crrouter.NetworkControl
 ExecStart=/usr/local/bin/netctld --foreground
 Restart=on-failure
 RestartSec=10
