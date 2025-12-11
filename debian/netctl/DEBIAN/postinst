@@ -1,0 +1,80 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Create runtime directory
+        if [ ! -d /run/netctl ]; then
+            mkdir -p /run/netctl
+            chmod 755 /run/netctl
+        fi
+
+        # Update man database
+        if [ -x /usr/bin/mandb ]; then
+            mandb -q || true
+        fi
+
+        # Reload systemd daemon
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload || true
+        fi
+
+        echo "netctl has been installed successfully."
+        echo ""
+        echo "Available services:"
+        echo "  - netctld.service   : CR D-Bus daemon (org.crrouter.NetworkControl)"
+        echo "  - netctl.service    : NetworkManager compatibility daemon"
+        echo ""
+        echo "To get started with netctld (recommended):"
+        echo "  sudo systemctl enable --now netctld.service"
+        echo "  nccli --use-dbus device wifi list"
+        echo ""
+        echo "Documentation:"
+        echo "  - /usr/share/doc/netctl/INSTALL_SYSTEMD.md"
+        echo "  - /usr/share/doc/netctl/examples/"
+        echo "  - /usr/share/doc/netctl/systemd/README.md"
+        echo ""
+        ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+# Automatically added by dh_installsystemd/13.24.2
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	# The following line should be removed in trixie or trixie+1
+	deb-systemd-helper unmask 'netctl.service' >/dev/null || true
+
+	# was-enabled defaults to true, so new installations run enable.
+	if deb-systemd-helper --quiet was-enabled 'netctl.service'; then
+		# Enables the unit on first installation, creates new
+		# symlinks on upgrades if the unit file has changed.
+		deb-systemd-helper enable 'netctl.service' >/dev/null || true
+	else
+		# Update the statefile to add new symlinks (if any), which need to be
+		# cleaned up on purge. Also remove old symlinks.
+		deb-systemd-helper update-state 'netctl.service' >/dev/null || true
+	fi
+fi
+# End automatically added section
+# Automatically added by dh_installsystemd/13.24.2
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	if [ -d /run/systemd/system ]; then
+		systemctl --system daemon-reload >/dev/null || true
+		if [ -n "$2" ]; then
+			_dh_action=restart
+		else
+			_dh_action=start
+		fi
+		deb-systemd-invoke $_dh_action 'netctl.service' >/dev/null || true
+	fi
+fi
+# End automatically added section
+
+
+exit 0

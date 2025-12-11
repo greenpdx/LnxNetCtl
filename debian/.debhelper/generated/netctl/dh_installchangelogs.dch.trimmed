@@ -1,0 +1,19 @@
+netctl (0.1.0-1) unstable; urgency=medium
+
+  * Initial release.
+  * Async network management with tokio runtime
+  * Interface management (up/down, IP configuration)
+  * WiFi support (scan, connect, regulatory domain, TX power)
+  * Access point mode with hostapd
+  * DHCP server integration with dora
+  * DNS management with unbound
+  * Routing control
+  * Bridge and VLAN support
+  * VPN support (OpenVPN, WireGuard)
+  * NetworkManager D-Bus compatibility layer
+  * Plugin architecture for extensibility
+  * NetworkManager configuration converter (nm-converter)
+  * Systemd service integration
+  * Complete man pages
+
+ -- netctl developers <netctl@example.com>  Tue, 12 Nov 2025 15:00:00 +0000

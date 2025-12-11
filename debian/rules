@@ -27,8 +27,10 @@ override_dh_auto_test:
 
 override_dh_auto_install:
 	# Install binaries
-	install -D -m 0755 target/release/netctl debian/netctl/usr/bin/netctl
+	install -D -m 0755 target/release/netctld debian/netctl/usr/bin/netctld
+	install -D -m 0755 target/release/nccli debian/netctl/usr/bin/nccli
 	install -D -m 0755 target/release/nm-converter debian/netctl/usr/bin/nm-converter
+	install -D -m 0755 target/release/netctl-tor-server debian/netctl/usr/bin/netctl-tor-server
 
 	# Install systemd services
 	install -D -m 0644 systemd/netctl.service debian/netctl/lib/systemd/system/netctl.service
