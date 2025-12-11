@@ -1,3 +1,9 @@
+netctl (0.1.0-2) unstable; urgency=medium
+
+  * .gitignore,debian/.debhelper/generated/netctl/dh_installchangelogs.dch.trimmed,debian/.debhelper/generated/netctl/installed-by-dh_installdocs,debian/.debhelper/generated/netctl/installed-by-dh_installman,debian/.debhelper/generated/netctl/postinst.service
+
+ -- netctl developers <netctl@example.com>  Thu, 11 Dec 2025 19:21:32 +0000
+
 netctl (0.1.0-1) unstable; urgency=medium
 
   * Initial release.
