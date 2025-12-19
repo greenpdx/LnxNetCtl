@@ -5,7 +5,7 @@
 //! - WiFi management
 //! - Access Point (hostapd)
 //! - DHCP server (dora)
-//! - DHCP testing and diagnostics (dhcpm)
+//! - DHCP testing and diagnostics
 //! - DNS configuration
 //! - Routing
 //! - VPN management (WireGuard, OpenVPN, IPsec)
@@ -22,9 +22,6 @@ pub mod dhcp;
 pub mod dhcp_client;
 pub mod link_monitor;
 pub mod privilege_token;
-
-#[cfg(feature = "dhcp-testing")]
-pub mod dhcpm;
 
 pub mod routing;
 pub mod device;
@@ -58,12 +55,6 @@ pub use connection_config::{
     ConnectionSection, WifiSection, WifiSecuritySection,
     IpConfigSection, EthernetSection, VpnSection,
     WireGuardVpnSection, WireGuardPeer, OpenVpnSection,
-};
-
-#[cfg(feature = "dhcp-testing")]
-pub use dhcpm::{
-    DhcpmController, DhcpTestConfig, DhcpTestResult, DhcpResponse,
-    DhcpMessageType, DhcpOption,
 };
 
 pub use routing::RoutingController;

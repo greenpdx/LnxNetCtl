@@ -80,7 +80,8 @@ anyhow = "1.0"
 libloading = { version = "0.9", optional = true }
 
 # Optional: DHCP testing (not fully implemented)
-dhcpm = { git = "https://github.com/leshow/dhcpm", default-features = false, optional = true }
+# Removed for publishing - git dependencies not allowed
+# dhcpm = { git = "https://github.com/leshow/dhcpm", default-features = false, optional = true }
 
 # Optional: Tor via Arti
 arti-client = { version = "0.36", optional = true }
@@ -102,8 +103,8 @@ default = ["dbus-nm", "plugins"]
 dbus-nm = []  # NetworkManager D-Bus compatibility
 plugins = ["dep:libloading"]  # Dynamic plugin loading
 vpn-tor = ["dep:arti-client", "dep:tor-rtcompat"]  # Tor VPN support via Arti (for netctld plugin)
-dhcp-testing = ["dep:dhcpm"]  # DHCP testing (incomplete implementation)
-full = ["plugins", "vpn-tor", "dhcp-testing"]  # All optional features
+# dhcp-testing = ["dep:dhcpm"]  # DHCP testing (incomplete implementation) - removed for publishing
+full = ["plugins", "vpn-tor"]  # All optional features
 
 [profile.release]
 opt-level = 3
